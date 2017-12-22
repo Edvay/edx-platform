@@ -182,7 +182,9 @@ class CourseTeamMembership(models.Model):
         """Memberships are immutable, with the exception of last activity
         date.
         """
-        if name in self.immutable_fields:
+        if name != '_state' and \
+                not self._state.adding and \
+                name in self.immutable_fields:
             # Check the current value -- if it is None, then this
             # model is being created from the database and it's fine
             # to set the value. Otherwise, we're trying to overwrite

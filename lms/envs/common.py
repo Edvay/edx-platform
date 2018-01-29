@@ -2238,6 +2238,9 @@ INSTALLED_APPS = (
     'openedx.features.enterprise_support',
 
     'experiments',
+
+    #indus launcher 
+    'create_site'
 )
 
 ######################### CSRF #########################################

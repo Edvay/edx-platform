@@ -1033,7 +1033,7 @@ if settings.FEATURES.get('ENABLE_FINANCIAL_ASSISTANCE_FORM'):
 
 urlpatterns += (
         url(
-            r'^createsite/$',
+            r'^createsite/',
             include('lms.djangoapps.create_site.urls')),
 
     )

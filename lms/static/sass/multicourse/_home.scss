@@ -14,9 +14,12 @@ $course-search-input-height: ($button-size);
   }
 
   > header {
+    background-color: $red-d1;
     @include linear-gradient($homepage__header--gradient__color--alpha, $homepage__header--gradient__color--bravo);
+    background-color: linear-gradient(#9c9c9c,#995353)!important;
     @include clearfix();
     background-size: cover;
+
     background-image: $homepage-bg-image;
     box-shadow: 0 1px 0 0 $course-header-bg, inset 0 -1px 5px 0 $shadow-l1;
     overflow: hidden;

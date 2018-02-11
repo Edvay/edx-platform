@@ -268,6 +268,8 @@ ENV_ROOT = REPO_ROOT.dirname()  # virtualenv dir /edx-platform is in
 
 GITHUB_REPO_ROOT = ENV_ROOT / "data"
 
+GRADES_DOWNLOAD_ROUTING_KEY = "edx.core.high_mem"
+
 sys.path.append(REPO_ROOT)
 sys.path.append(PROJECT_ROOT / 'djangoapps')
 sys.path.append(COMMON_ROOT / 'djangoapps')

@@ -26,7 +26,7 @@ from django.core.validators import ValidationError, validate_email
 from django.db import IntegrityError, transaction
 from django.db.models.signals import post_save
 from django.dispatch import Signal, receiver
-from django.http import Http404, HttpResponse, HttpResponseBadRequest, HttpResponseForbidden
+from django.http import Http404, HttpResponse, HttpResponseBadRequest, HttpResponseForbidden, HttpResponseRedirect
 from django.shortcuts import redirect
 from django.template.response import TemplateResponse
 from django.utils.encoding import force_bytes, force_text
@@ -129,6 +129,17 @@ from util.json_request import JsonResponse
 from util.milestones_helpers import get_pre_requisite_courses_not_completed
 from util.password_policy_validators import validate_password_strength
 from xmodule.modulestore.django import modulestore
+#below dependencies are added for the cue dashboards
+from courseware.courses import get_course_info_section_module
+from openedx.core.lib.xblock_utils import get_course_update_items
+import urllib, urllib2
+import hashlib
+import socket
+from static_replace import make_static_urls_absolute
+import lms.lib.comment_client as cc
+from lms.djangoapps.discussion.views import get_threads
+import django_comment_client.utils as utils
+
 
 log = logging.getLogger("edx.student")
 AUDIT_LOG = logging.getLogger("audit")
@@ -149,6 +160,28 @@ REGISTER_USER = Signal(providing_args=["user", "profile"])
 
 # Disable this warning because it doesn't make sense to completely refactor tests to appease Pylint
 # pylint: disable=logging-format-interpolation
+
+
+def apply_wrappers_to_content(content, module, request):
+    """
+    Updates a piece of html content with the filter functions stored in its module system, then replaces any
+    static urls with absolute urls.
+    Args:
+        content: The html content to which to apply the content wrappers generated for this module system.
+        module: The module containing a reference to the module system which contains functions to apply to the
+        content. These functions include:
+            * Replacing static url's
+            * Replacing course url's
+            * Replacing jump to id url's
+        request: The request, used to replace static URLs with absolute URLs.
+    Returns: A piece of html content containing the original content updated by each wrapper.
+    """
+    content = module.system.replace_urls(content)
+    content = module.system.replace_course_urls(content)
+    content = module.system.replace_jump_to_id_urls(content)
+
+    return make_static_urls_absolute(request, content)
+
 
 
 def csrf_token(context):
@@ -611,10 +644,548 @@ def compose_and_send_activation_email(user, profile, user_registration=None):
                                   '-' * 80 + '\n\n' + message_for_activation)
     send_activation_email.delay(subject, message_for_activation, from_address, dest_addr)
 
+def get_current_child(xmodule, min_depth=None, requested_child=None):
+    """
+    Get the xmodule.position's display item of an xmodule that has a position and
+    children.  If xmodule has no position or is out of bounds, return the first
+    child with children of min_depth.
+    For example, if chapter_one has no position set, with two child sections,
+    section-A having no children and section-B having a discussion unit,
+    `get_current_child(chapter, min_depth=1)`  will return section-B.
+    Returns None only if there are no children at all.
+    """
+    def _get_child(children):
+        """
+        Returns either the first or last child based on the value of
+        the requested_child parameter.  If requested_child is None,
+        returns the first child.
+        """
+        if requested_child == 'first':
+            return children[0]
+        elif requested_child == 'last':
+            return children[-1]
+        else:
+            return children[0]
+
+    def _get_default_child_module(child_modules):
+        """Returns the first child of xmodule, subject to min_depth."""
+        if min_depth <= 0:
+            return _get_child(child_modules)
+        else:
+            content_children = [
+                child for child in child_modules
+                if child.has_children_at_depth(min_depth - 1) and child.get_display_items()
+            ]
+            return _get_child(content_children) if content_children else None
+
+    child = None
+    if hasattr(xmodule, 'position'):
+        children = xmodule.get_display_items()
+        if len(children) > 0:
+            if xmodule.position is not None and not requested_child:
+                pos = xmodule.position - 1  # position is 1-indexed
+                if 0 <= pos < len(children):
+                    child = children[pos]
+                    if min_depth > 0 and not child.has_children_at_depth(min_depth - 1):
+                        child = None
+            if child is None:
+                child = _get_default_child_module(children)
+
+    return child
+
+
+
+
+def get_last_accessed_courseware(course, request, user):
+    """
+    Return the courseware module URL that the user last accessed,
+    or None if it cannot be found.
+    """
+   
+    field_data_cache = FieldDataCache.cache_for_descriptor_descendents(
+        course.id, request.user, course, depth=2
+    )
+    course_module = get_module_for_descriptor(
+        user, request, course, field_data_cache, course.id, course=course
+    )
+    chapter_module = get_current_child(course_module)
+    if chapter_module is not None:
+        section_module = get_current_child(chapter_module)
+        if section_module is not None:
+            url = reverse('courseware_section', kwargs={
+                'course_id': unicode(course.id),
+                'chapter': chapter_module.url_name,
+                'section': section_module.url_name
+            })
+            return url
+    return None
 
 @login_required
 @ensure_csrf_cookie
 def dashboard(request):
+    """
+    Provides the LMS dashboard view
+
+    TODO: This is lms specific and does not belong in common code.
+
+    Arguments:
+        request: The request object.
+
+    Returns:
+        The dashboard response.
+
+    """
+    user = request.user
+    if not UserProfile.objects.filter(user=user).exists():
+        return redirect(reverse('account_settings'))
+
+    platform_name = configuration_helpers.get_value("platform_name", settings.PLATFORM_NAME)
+    enable_verified_certificates = configuration_helpers.get_value(
+        'ENABLE_VERIFIED_CERTIFICATES',
+        settings.FEATURES.get('ENABLE_VERIFIED_CERTIFICATES')
+    )
+    display_course_modes_on_dashboard = configuration_helpers.get_value(
+        'DISPLAY_COURSE_MODES_ON_DASHBOARD',
+        settings.FEATURES.get('DISPLAY_COURSE_MODES_ON_DASHBOARD', True)
+    )
+    activation_email_support_link = configuration_helpers.get_value(
+        'ACTIVATION_EMAIL_SUPPORT_LINK', settings.ACTIVATION_EMAIL_SUPPORT_LINK
+    ) or settings.SUPPORT_SITE_LINK
+
+    # Let's filter out any courses in an "org" that has been declared to be
+    # in a configuration
+    org_filter_out_set = configuration_helpers.get_all_orgs()
+
+    # Remove current site orgs from the "filter out" list, if applicable.
+    # We want to filter and only show enrollments for courses within
+    # the organizations defined in configuration for the current site.
+    course_org_filter = configuration_helpers.get_current_site_orgs()
+    if course_org_filter:
+        org_filter_out_set = org_filter_out_set - set(course_org_filter)
+
+    # Build our (course, enrollment) list for the user, but ignore any courses that no
+    # longer exist (because the course IDs have changed). Still, we don't delete those
+    # enrollments, because it could have been a data push snafu.
+    course_enrollments = list(get_course_enrollments(user, course_org_filter, org_filter_out_set))
+
+    # Record how many courses there are so that we can get a better
+    # understanding of usage patterns on prod.
+    monitoring_utils.accumulate('num_courses', len(course_enrollments))
+
+    # sort the enrollment pairs by the enrollment date
+    course_enrollments.sort(key=lambda x: x.created, reverse=True)
+
+    # Retrieve the course modes for each course
+    enrolled_course_ids = [enrollment.course_id for enrollment in course_enrollments]
+    __, unexpired_course_modes = CourseMode.all_and_unexpired_modes_for_courses(enrolled_course_ids)
+    course_modes_by_course = {
+        course_id: {
+            mode.slug: mode
+            for mode in modes
+        }
+        for course_id, modes in unexpired_course_modes.iteritems()
+    }
+
+    # Check to see if the student has recently enrolled in a course.
+    # If so, display a notification message confirming the enrollment.
+    enrollment_message = _create_recent_enrollment_message(
+        course_enrollments, course_modes_by_course
+    )
+
+    course_optouts = Optout.objects.filter(user=user).values_list('course_id', flat=True)
+
+    sidebar_account_activation_message = ''
+    banner_account_activation_message = ''
+    display_account_activation_message_on_sidebar = configuration_helpers.get_value(
+        'DISPLAY_ACCOUNT_ACTIVATION_MESSAGE_ON_SIDEBAR',
+        settings.FEATURES.get('DISPLAY_ACCOUNT_ACTIVATION_MESSAGE_ON_SIDEBAR', False)
+    )
+
+    # Display activation message in sidebar if DISPLAY_ACCOUNT_ACTIVATION_MESSAGE_ON_SIDEBAR
+    # flag is active. Otherwise display existing message at the top.
+    if display_account_activation_message_on_sidebar and not user.is_active:
+        sidebar_account_activation_message = render_to_string(
+            'registration/account_activation_sidebar_notice.html',
+            {
+                'email': user.email,
+                'platform_name': platform_name,
+                'activation_email_support_link': activation_email_support_link
+            }
+        )
+    elif not user.is_active:
+        banner_account_activation_message = render_to_string(
+            'registration/activate_account_notice.html',
+            {'email': user.email}
+        )
+
+    enterprise_message = get_dashboard_consent_notification(request, user, course_enrollments)
+
+    # Account activation message
+    account_activation_messages = [
+        message for message in messages.get_messages(request) if 'account-activation' in message.tags
+    ]
+
+    # Global staff can see what courses encountered an error on their dashboard
+    staff_access = False
+    errored_courses = {}
+    if has_access(user, 'staff', 'global'):
+        # Show any courses that encountered an error on load
+        staff_access = True
+        errored_courses = modulestore().get_errored_courses()
+
+    show_courseware_links_for = frozenset(
+        enrollment.course_id for enrollment in course_enrollments
+        if has_access(request.user, 'load', enrollment.course_overview)
+        and has_access(request.user, 'view_courseware_with_prerequisites', enrollment.course_overview)
+    )
+
+    # Find programs associated with course runs being displayed. This information
+    # is passed in the template context to allow rendering of program-related
+    # information on the dashboard.
+    meter = ProgramProgressMeter(user, enrollments=course_enrollments)
+    inverted_programs = meter.invert_programs()
+
+    # Construct a dictionary of course mode information
+    # used to render the course list.  We re-use the course modes dict
+    # we loaded earlier to avoid hitting the database.
+    course_mode_info = {
+        enrollment.course_id: complete_course_mode_info(
+            enrollment.course_id, enrollment,
+            modes=course_modes_by_course[enrollment.course_id]
+        )
+        for enrollment in course_enrollments
+    }
+
+
+    ##indus dashboard changes
+
+    update_items = []
+    textbooks = []
+    handout_items = {}
+    discussion_threads = []
+    course_bbb = []
+    for firstcourse in show_courseware_links_for:
+        firstcourseContent = modulestore().get_course(firstcourse)
+        course_updates_module = get_course_info_section_module(request,         request.user,firstcourseContent, 'updates')
+        tempUpdates = get_course_update_items(course_updates_module)
+
+        for temp in tempUpdates:
+            temp['coursename'] =  firstcourseContent.display_name
+        update_items.extend(tempUpdates)
+      
+        temptext = {}
+        temptext['coursename'] = firstcourseContent.display_name
+        temptext['id'] = firstcourseContent.id
+        temptext['textbooks'] = firstcourseContent.pdf_textbooks
+        checkMeetingStatus = isMeetingRunning(firstcourse)
+        if checkMeetingStatus:
+            if checkMeetingStatus['returncode'] == 'SUCCESS':
+                if checkMeetingStatus['running'] == 'true':
+                    temptext['isLive'] = True
+                else:
+                    temptext['isLive'] = False
+            else:
+                temptext['isLive'] = False 
+        else:
+            temptext['isLive'] = False                 
+
+        course_bbb.append(temptext)
+
+        if temptext['textbooks']:
+            textbooks.append(temptext)
+
+        course_handouts_module = get_course_info_section_module(request, request.user, firstcourseContent, 'handouts')
+        if course_handouts_module:
+            if course_handouts_module.data == "<ol></ol>":
+                handouts_html = None
+            else:
+                handout_items[firstcourseContent.display_name] = apply_wrappers_to_content(course_handouts_module.data, course_handouts_module, request)
+        userDiscussion = cc.User.from_django_user(request.user)
+        user_info = userDiscussion.to_dict()
+        try:
+            unsafethreads,query_params = get_threads(request, firstcourseContent, user_info)   
+            is_staff = False           
+            threads = [utils.prepare_content(thread, firstcourseContent.id, is_staff) for thread in unsafethreads]
+            for thread in threads:
+                thread['coursename'] = firstcourseContent.display_name
+       
+            discussion_threads.extend(threads)
+        except cc.utils.CommentClientMaintenanceError:
+            log.warning("Forum is in maintenance mode")
+            return render_to_response('discussion/maintenance.html', {
+                'disable_courseware_js': True,
+                'uses_pattern_library': True,
+            })
+        except ValueError:
+            return HttpResponseBadRequest("Invalid group_id")        
+    
+ 
+    updates_to_show = [
+        update for update in update_items       
+        if update.get("status") != "deleted"
+     ]     
+    
+    profile = UserProfile.objects.get(user=user)
+    last_accessed_name = None
+    last_accessed_url = '/'
+    meta = profile.get_meta()
+
+    last_accessed_name = None
+    last_accessed_url = None    
+    if 'last_accessed_course' in meta:
+        course_id = meta['last_accessed_course']
+        course_key = CourseKey.from_string(unicode(course_id))
+        last_accessed_url = get_last_accessed_courseware(modulestore().get_course(course_key),request, request.user)    
+        last_accessed_name = 'Demo'
+    if not last_accessed_url:
+        last_accessed_url = '' #reverse('info', args=[unicode(course_enrollments[0].course_overview.id)])
+    
+    verify_status_by_course = check_verify_status_by_course(user, course_enrollments)
+    cert_statuses = {
+        enrollment.course_id: cert_info(request.user, enrollment.course_overview, enrollment.mode)
+        for enrollment in course_enrollments
+}
+   ##indus dashboard changes end
+    # Determine the per-course verification status
+    # This is a dictionary in which the keys are course locators
+    # and the values are one of:
+    #
+    # VERIFY_STATUS_NEED_TO_VERIFY
+    # VERIFY_STATUS_SUBMITTED
+    # VERIFY_STATUS_APPROVED
+    # VERIFY_STATUS_MISSED_DEADLINE
+    #
+    # Each of which correspond to a particular message to display
+    # next to the course on the dashboard.
+    #
+    # If a course is not included in this dictionary,
+    # there is no verification messaging to display.
+    verify_status_by_course = check_verify_status_by_course(user, course_enrollments)
+    cert_statuses = {
+        enrollment.course_id: cert_info(request.user, enrollment.course_overview, enrollment.mode)
+        for enrollment in course_enrollments
+    }
+
+    # only show email settings for Mongo course and when bulk email is turned on
+    show_email_settings_for = frozenset(
+        enrollment.course_id for enrollment in course_enrollments if (
+            BulkEmailFlag.feature_enabled(enrollment.course_id)
+        )
+    )
+
+    # Verification Attempts
+    # Used to generate the "you must reverify for course x" banner
+    verification_status, verification_error_codes = SoftwareSecurePhotoVerification.user_status(user)
+    verification_errors = get_verification_error_reasons_for_display(verification_error_codes)
+
+    # Gets data for midcourse reverifications, if any are necessary or have failed
+    statuses = ["approved", "denied", "pending", "must_reverify"]
+    reverifications = reverification_info(statuses)
+
+    user_already_has_certs_for = GeneratedCertificate.course_ids_with_certs_for_user(request.user)
+    show_refund_option_for = frozenset(
+        enrollment.course_id for enrollment in course_enrollments
+        if enrollment.refundable(
+            user_already_has_certs_for=user_already_has_certs_for
+        )
+    )
+
+    block_courses = frozenset(
+        enrollment.course_id for enrollment in course_enrollments
+        if is_course_blocked(
+            request,
+            CourseRegistrationCode.objects.filter(
+                course_id=enrollment.course_id,
+                registrationcoderedemption__redeemed_by=request.user
+            ),
+            enrollment.course_id
+        )
+    )
+
+    enrolled_courses_either_paid = frozenset(
+        enrollment.course_id for enrollment in course_enrollments
+        if enrollment.is_paid_course()
+    )
+
+    # If there are *any* denied reverifications that have not been toggled off,
+    # we'll display the banner
+    denied_banner = any(item.display for item in reverifications["denied"])
+
+    # Populate the Order History for the side-bar.
+    order_history_list = order_history(user, course_org_filter=course_org_filter, org_filter_out_set=org_filter_out_set)
+
+    # get list of courses having pre-requisites yet to be completed
+    courses_having_prerequisites = frozenset(
+        enrollment.course_id for enrollment in course_enrollments
+        if enrollment.course_overview.pre_requisite_courses
+    )
+    courses_requirements_not_met = get_pre_requisite_courses_not_completed(user, courses_having_prerequisites)
+
+    if 'notlive' in request.GET:
+        redirect_message = _("The course you are looking for does not start until {date}.").format(
+            date=request.GET['notlive']
+        )
+    elif 'course_closed' in request.GET:
+        redirect_message = _("The course you are looking for is closed for enrollment as of {date}.").format(
+            date=request.GET['course_closed']
+        )
+    else:
+        redirect_message = ''
+
+    valid_verification_statuses = ['approved', 'must_reverify', 'pending', 'expired']
+    display_sidebar_on_dashboard = len(order_history_list) or verification_status in valid_verification_statuses
+
+    context = {
+        'enterprise_message': enterprise_message,
+        'enrollment_message': enrollment_message,
+        'redirect_message': redirect_message,
+        'account_activation_messages': account_activation_messages,
+        'course_enrollments': course_enrollments,
+        'course_optouts': course_optouts,
+        'banner_account_activation_message': banner_account_activation_message,
+        'sidebar_account_activation_message': sidebar_account_activation_message,
+        'staff_access': staff_access,
+        'errored_courses': errored_courses,
+        'show_courseware_links_for': show_courseware_links_for,
+        'all_course_modes': course_mode_info,
+        'cert_statuses': cert_statuses,
+        'credit_statuses': _credit_statuses(user, course_enrollments),
+        'show_email_settings_for': show_email_settings_for,
+        'reverifications': reverifications,
+        'verification_status': verification_status,
+        'verification_status_by_course': verify_status_by_course,
+        'verification_errors': verification_errors,
+        'show_refund_option_for': show_refund_option_for,
+        'block_courses': block_courses,
+        'denied_banner': denied_banner,
+        'billing_email': settings.PAYMENT_SUPPORT_EMAIL,
+        'user': user,
+        'logout_url': reverse('logout'),
+        'platform_name': platform_name,
+        'enrolled_courses_either_paid': enrolled_courses_either_paid,
+        'provider_states': [],
+        'order_history_list': order_history_list,
+        'courses_requirements_not_met': courses_requirements_not_met,
+        'nav_hidden': True,
+        'inverted_programs': inverted_programs,
+        'show_program_listing': ProgramsApiConfig.is_enabled(),
+        'disable_courseware_js': True,
+        'display_course_modes_on_dashboard': enable_verified_certificates and display_course_modes_on_dashboard,
+        'display_sidebar_on_dashboard': display_sidebar_on_dashboard,
+        ##indus
+        'last_accessed_url':last_accessed_url,
+        'last_accessed_name':last_accessed_name,
+        'textbooks':textbooks,
+        'handout_items':handout_items,
+        'discussion_threads':discussion_threads,
+        'course_bbb':course_bbb,
+    }
+
+    ecommerce_service = EcommerceService()
+    if ecommerce_service.is_enabled(request.user):
+        context.update({
+            'use_ecommerce_payment_flow': True,
+            'ecommerce_payment_page': ecommerce_service.payment_page_url(),
+        })
+
+    response = render_to_response('dashboard.html', context)
+    set_user_info_cookie(response, request)
+    return response
+
+
+def bbb_wrap_load_file(url):
+    timeout = 10
+    socket.setdefaulttimeout(timeout)
+    try:
+        req = urllib2.urlopen(url)
+        return minidom.parse(req)
+    except:
+        return False    
+
+def assign2Dict(xml):
+    try:
+        mapping = {}
+        response = xml.firstChild
+        for child in response.childNodes:
+            print child
+            if( child.hasChildNodes() ):
+                print 'node value' + child.firstChild.nodeValue
+                mapping[child.tagName] = child.firstChild.nodeValue
+            else:
+                mapping[child.tagName] = None
+                                
+        return mapping
+    except:
+        return False
+
+
+
+def isMeetingRunning(course_id):  
+    
+    url_join = settings.BIGBLUEBUTTON_SERVER + "api/isMeetingRunning?"    
+    parameters = {
+                  
+                  'meetingID' : course_id ,
+                
+
+                  }    
+    parameters = urllib.urlencode(parameters)
+    final_url = url_join + parameters + '&checksum=' + hashlib.sha1("isMeetingRunning" + parameters + settings.BIGBLUEBUTTON_SALT).hexdigest()
+  
+    xml = bbb_wrap_load_file(final_url)
+
+    if(xml):
+        return assign2Dict(xml)
+
+@login_required
+@ensure_csrf_cookie
+def joinBBB(request, course_id):
+   
+    user = request.user
+    course_key = SlashSeparatedCourseKey.from_deprecated_string(course_id)
+    course = get_course_overview_with_access(user, 'load', course_key)
+   
+    
+    if request.user.is_staff:
+        url_join = settings.BIGBLUEBUTTON_SERVER + "api/create?"    
+        parameters = {
+                      'name' : course.display_name ,  
+                      'meetingID' : course_key ,
+                      'fullName' : user.username,
+                      'attendeePW' : 'ap',
+                      'moderatorPW' : 'mp',
+                      'logoutURL': 'http://demo.cuelms.com/',
+
+                      }    
+        parameters = urllib.urlencode(parameters)
+        final_url = url_join + parameters + '&checksum=' + hashlib.sha1("create" + parameters + settings.BIGBLUEBUTTON_SALT).hexdigest()
+        bbb_wrap_load_file(final_url)
+        parameters = {
+                      
+                      'meetingID' : course_key ,
+                      'fullName' : user.username,
+                      'password' : 'mp',
+                      } 
+    else:
+        parameters = {
+                      
+                      'meetingID' : course_id ,
+                      'fullName' : user.username,
+                      'password' : 'ap',
+                      } 
+        
+    
+    url_join = settings.BIGBLUEBUTTON_SERVER + "api/join?"    
+      
+    parameters = urllib.urlencode(parameters)
+    final_url = url_join + parameters + '&checksum=' + hashlib.sha1("join" + parameters + settings.BIGBLUEBUTTON_SALT).hexdigest()
+    return HttpResponseRedirect(final_url)
+
+
+
+@login_required
+@ensure_csrf_cookie
+def mycourses(request):
     """
     Provides the LMS dashboard view
 
@@ -883,7 +1454,7 @@ def dashboard(request):
             'ecommerce_payment_page': ecommerce_service.payment_page_url(),
         })
 
-    response = render_to_response('dashboard.html', context)
+    response = render_to_response('mycourses.html', context)
     set_user_info_cookie(response, request)
     return response
 

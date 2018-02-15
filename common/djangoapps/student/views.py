@@ -130,7 +130,7 @@ from util.milestones_helpers import get_pre_requisite_courses_not_completed
 from util.password_policy_validators import validate_password_strength
 from xmodule.modulestore.django import modulestore
 #below dependencies are added for the cue dashboards
-from courseware.courses import get_course_info_section_module
+from courseware.courses import get_course_info_section_module, get_course_overview_with_access
 from openedx.core.lib.xblock_utils import get_course_update_items
 import urllib, urllib2
 import hashlib

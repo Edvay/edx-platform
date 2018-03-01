@@ -1,0 +1,4 @@
+<%! from django.utils.translation import ugettext as _ %>
+<%! from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers %>
+
+${_("Activate Your Indus - Edvay Account")}

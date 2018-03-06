@@ -19,6 +19,16 @@ define(['jquery', 'gettext', 'common/js/components/utils/view_utils', 'js/views/
                 });
             };
 
+            this.setAllowedOrg = function() {
+                $.getJSON('/allowed_organizations', function(data) {
+                    console.log(data);
+                    $(selectors.org).val(data[0]);                 
+                    $(selectors.org).attr({
+                    'disabled': 'disabled'
+                   });
+                });
+            };
+
             this.create = function(courseInfo, errorHandler) {
                 $.postJSON(
                     '/course/',

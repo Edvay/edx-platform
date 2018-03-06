@@ -3,7 +3,7 @@ from django.conf.urls import include, patterns, url
 # There is a course creators admin table.
 from ratelimitbackend import admin
 
-from cms.djangoapps.contentstore.views.organization import OrganizationListView
+from cms.djangoapps.contentstore.views.organization import OrganizationListView, AllowedOrganization
 
 admin.autodiscover()
 
@@ -39,6 +39,7 @@ urlpatterns = patterns(
     url(r'^not_found$', 'contentstore.views.not_found', name='not_found'),
     url(r'^server_error$', 'contentstore.views.server_error', name='server_error'),
     url(r'^organizations$', OrganizationListView.as_view(), name='organizations'),
+    url(r'^allowed_organizations$', AllowedOrganization.as_view(), name='allowed_organizations'),
 
     # noop to squelch ajax errors
     url(r'^event$', 'contentstore.views.event', name='event'),

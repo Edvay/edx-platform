@@ -483,6 +483,7 @@ def course_listing(request):
     else:
         org = None
         show_libraries = LIBRARIES_ENABLED
+    
     edvayInstances = EdvayInstance.objects.get(user=request.user) 
     org = edvayInstances.org_name
     courses_iter, in_process_course_actions = get_courses_accessible_to_user(request, org)

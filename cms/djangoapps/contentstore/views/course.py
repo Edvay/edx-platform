@@ -90,6 +90,8 @@ from .component import ADVANCED_COMPONENT_TYPES
 from .item import create_xblock_info
 from .library import LIBRARIES_ENABLED, get_library_creator_status
 
+from lms.djangoapps.create_site.models import EdvayInstance
+
 log = logging.getLogger(__name__)
 
 __all__ = ['course_info_handler', 'course_handler', 'course_listing',
@@ -481,6 +483,8 @@ def course_listing(request):
     else:
         org = None
         show_libraries = LIBRARIES_ENABLED
+    edvayInstances = EdvayInstance.objects.get(user=request.user) 
+    org = edvayInstances.org_name
     courses_iter, in_process_course_actions = get_courses_accessible_to_user(request, org)
     user = request.user
     libraries = _accessible_libraries_iter(request.user) if show_libraries else []

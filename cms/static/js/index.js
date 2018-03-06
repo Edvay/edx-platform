@@ -111,7 +111,7 @@ define(['domReady', 'jquery', 'underscore', 'js/utils/cancel_on_escape', 'js/vie
             $('.new-course-save').on('click', saveNewCourse);
             $cancelButton.bind('click', makeCancelHandler('course'));
             CancelOnEscape($cancelButton);
-            CreateCourseUtils.setupOrgAutocomplete();
+            CreateCourseUtils.setAllowedOrg();
             CreateCourseUtils.configureHandlers();
             rtlTextDirection();
         };

@@ -51,7 +51,11 @@ class SiteConfiguration(models.Model):
             Configuration value for the given key or returns `None` if configuration is not enabled.
         """
         if self.enabled:
-            try:
+            try:                
+                if name == 'ENABLE_MKTG_SITE':
+                    features = self.values.get('FEATURES',None)
+                    if features:
+                        return features[name]
                 return self.values.get(name, default)  # pylint: disable=no-member
             except AttributeError as error:
                 logger.exception('Invalid JSON data. \n [%s]', error)

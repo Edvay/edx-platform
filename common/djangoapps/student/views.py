@@ -867,13 +867,11 @@ def dashboard(request):
     for firstcourse in show_courseware_links_for:
         firstcourseContent = modulestore().get_course(firstcourse)
         course_updates_module = get_course_info_section_module(request,         request.user,firstcourseContent, 'updates')
-        tempUpdates = get_course_update_items(course_updates_module)
-        print tempUpdates
+        tempUpdates = get_course_update_items(course_updates_module)        
 
         for temp in tempUpdates:
             temp['coursename'] =  firstcourseContent.display_name
-        update_items.extend(tempUpdates)
-        print update_items
+        update_items.extend(tempUpdates)        
         temptext = {}
         temptext['coursename'] = firstcourseContent.display_name
         temptext['id'] = firstcourseContent.id

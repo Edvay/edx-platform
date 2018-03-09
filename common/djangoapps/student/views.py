@@ -139,6 +139,7 @@ from static_replace import make_static_urls_absolute
 import lms.lib.comment_client as cc
 from lms.djangoapps.discussion.views import get_threads
 import django_comment_client.utils as utils
+from xml.dom.minidom import parse, parseString
 
 
 log = logging.getLogger("edx.student")
@@ -1098,7 +1099,7 @@ def bbb_wrap_load_file(url):
     socket.setdefaulttimeout(timeout)
     try:
         req = urllib2.urlopen(url)
-        return minidom.parse(req)
+        return parse(req)
     except:
         return False    
 

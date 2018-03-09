@@ -868,11 +868,12 @@ def dashboard(request):
         firstcourseContent = modulestore().get_course(firstcourse)
         course_updates_module = get_course_info_section_module(request,         request.user,firstcourseContent, 'updates')
         tempUpdates = get_course_update_items(course_updates_module)
+        print tempUpdates
 
         for temp in tempUpdates:
             temp['coursename'] =  firstcourseContent.display_name
         update_items.extend(tempUpdates)
-      
+        print update_items
         temptext = {}
         temptext['coursename'] = firstcourseContent.display_name
         temptext['id'] = firstcourseContent.id
@@ -1079,6 +1080,7 @@ def dashboard(request):
         'handout_items':handout_items,
         'discussion_threads':discussion_threads,
         'course_bbb':course_bbb,
+        'updates_to_show':updates_to_show,
     }
 
     ecommerce_service = EcommerceService()
@@ -1154,7 +1156,7 @@ def joinBBB(request, course_id):
                       'fullName' : user.username,
                       'attendeePW' : 'ap',
                       'moderatorPW' : 'mp',
-                      'logoutURL': 'http://demo.cuelms.com/',
+                      'logoutURL': 'http://indus.edvay.com',
 
                       }    
         parameters = urllib.urlencode(parameters)

@@ -7,6 +7,8 @@ from django.views.generic import View
 from openedx.core.djangolib.js_utils import dump_js_escaped_json
 from util.organizations_helpers import get_organizations
 from lms.djangoapps.create_site.models import EdvayInstance
+from django.http import JsonResponse
+
 
 class OrganizationListView(View):
     """View rendering organization list as json.
@@ -31,8 +33,12 @@ class AllowedOrganization(View):
 
     @method_decorator(login_required)
     def get(self, request, *args, **kwargs):
-        """Returns organization list as json."""   
-        edvayInstances = EdvayInstance.objects.get(user=request.user)
-        org = edvayInstances.org_name     
+        """Returns organization list as json."""
+        try: 
+            edvayInstances = EdvayInstance.objects.get(user=request.user)
+            org = edvayInstances.org_name
+        except EdvayInstance.DoesNotExist:
+            return JsonResponse({'status':'error'})
+                     
         org_names_list = [org]
         return HttpResponse(dump_js_escaped_json(org_names_list), content_type='application/json; charset=utf-8')

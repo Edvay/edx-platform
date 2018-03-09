@@ -21,12 +21,20 @@ define(['jquery', 'gettext', 'common/js/components/utils/view_utils', 'js/views/
 
             this.setAllowedOrg = function() {
                 $.getJSON('/allowed_organizations', function(data) {
-                    console.log(data);
+                    if(data.status == 'error'){
+                        $.getJSON('/organizations', function(data) {
+                                            $(selectors.org).autocomplete({
+                                                                    source: data
+                                                                     });
+                                                                      });
+                       
+                       console.log('No org filter');
+                    } else {
                     $(selectors.org).val(data[0]);                 
-                    $(selectors.org).attr({
-                    'disabled': 'disabled'
-                   });
-                });
+                    $(selectors.org).attr({ 'disabled': 'disabled'});
+                    console.log('indus');
+                }});
+
             };
 
             this.create = function(courseInfo, errorHandler) {

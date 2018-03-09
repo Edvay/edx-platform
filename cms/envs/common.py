@@ -127,6 +127,7 @@ STUDIO_NAME = "Studio"
 STUDIO_SHORT_NAME = "Studio"
 FEATURES = {
     'GITHUB_PUSH': False,
+    'DISABLE_COURSE_CREATION' : True, 
 
     # for consistency in user-experience, keep the value of the following 3 settings
     # in sync with the ones in lms/envs/common.py

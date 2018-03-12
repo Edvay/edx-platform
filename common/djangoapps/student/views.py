@@ -140,7 +140,7 @@ import lms.lib.comment_client as cc
 from lms.djangoapps.discussion.views import get_threads
 import django_comment_client.utils as utils
 from xml.dom.minidom import parse, parseString
-
+from create_site.models import EdvayInstance
 
 log = logging.getLogger("edx.student")
 AUDIT_LOG = logging.getLogger("audit")
@@ -867,9 +867,8 @@ def dashboard(request):
     course_bbb = []
     for firstcourse in show_courseware_links_for:
         firstcourseContent = modulestore().get_course(firstcourse)
-        course_updates_module = get_course_info_section_module(request,         request.user,firstcourseContent, 'updates')
+        course_updates_module = get_course_info_section_module(request,request.user,firstcourseContent, 'updates')
         tempUpdates = get_course_update_items(course_updates_module)
-
         for temp in tempUpdates:
             temp['coursename'] =  firstcourseContent.display_name
         update_items.extend(tempUpdates)
@@ -878,7 +877,7 @@ def dashboard(request):
         temptext['coursename'] = firstcourseContent.display_name
         temptext['id'] = firstcourseContent.id
         temptext['textbooks'] = firstcourseContent.pdf_textbooks
-        checkMeetingStatus = isMeetingRunning(firstcourse)
+        checkMeetingStatus = isMeetingRunning(request,firstcourse)
         if checkMeetingStatus:
             if checkMeetingStatus['returncode'] == 'SUCCESS':
                 if checkMeetingStatus['running'] == 'true':
@@ -1121,12 +1120,18 @@ def assign2Dict(xml):
 
 
 
-def isMeetingRunning(course_id):  
-    
+def isMeetingRunning(request, course_id):
+    meeting_counter = 0
+    try:
+        edvayinstance =  EdvayInstance.objects.get(org_name=course_id.org)
+        meeting_counter = edvayinstance.meeting_counter
+    except EdvayInstance.DoesNotExist:
+        pass
+    meetingID = str(course_id) + str(meeting_counter)
     url_join = settings.BIGBLUEBUTTON_SERVER + "api/isMeetingRunning?"    
     parameters = {
                   
-                  'meetingID' : course_id ,
+                  'meetingID' : meetingID ,
                 
 
                   }    
@@ -1144,18 +1149,28 @@ def joinBBB(request, course_id):
    
     user = request.user
     course_key = SlashSeparatedCourseKey.from_deprecated_string(course_id)
-    course = get_course_overview_with_access(user, 'load', course_key)
-   
+    course = get_course_overview_with_access(user, 'load', course_key)   
     
     if request.user.is_staff:
-        url_join = settings.BIGBLUEBUTTON_SERVER + "api/create?"    
+        url_join = settings.BIGBLUEBUTTON_SERVER + "api/create?"  
+        meeting_counter = 0                
+        try:
+            edvayinstance =  EdvayInstance.objects.get(user=user)
+            meeting_counter = edvayinstance.meeting_counter
+            meeting_counter = meeting_counter + 1
+            edvayinstance.meeting_counter = meeting_counter
+            edvayinstance.save()  
+        except EdvayInstance.DoesNotExist:
+            pass            
+        meetingID = str(course_id) + str(meeting_counter)         
         parameters = {
                       'name' : course.display_name ,  
-                      'meetingID' : course_key ,
+                      'meetingID' : meetingID ,
                       'fullName' : user.username,
                       'attendeePW' : 'ap',
                       'moderatorPW' : 'mp',
-                      'logoutURL': 'http://demo.cuelms.com/',
+                      'logoutURL': 'http://indus.edvay.com/',
+                      'record':'true'
 
                       }    
         parameters = urllib.urlencode(parameters)
@@ -1163,14 +1178,22 @@ def joinBBB(request, course_id):
         bbb_wrap_load_file(final_url)
         parameters = {
                       
-                      'meetingID' : course_key ,
+                      'meetingID' : meetingID ,
                       'fullName' : user.username,
                       'password' : 'mp',
                       } 
+                    
     else:
+        meeting_counter = 0
+        try:
+            edvayinstance =  EdvayInstance.objects.get(org_name=course.org)
+            meeting_counter = edvayinstance.meeting_counter
+        except EdvayInstance.DoesNotExist:
+            pass
+        meetingID = str(course_id) + str(meeting_counter)
         parameters = {
                       
-                      'meetingID' : course_id ,
+                      'meetingID' : meetingID ,
                       'fullName' : user.username,
                       'password' : 'ap',
                       } 

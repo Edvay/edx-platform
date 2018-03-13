@@ -141,6 +141,7 @@ from lms.djangoapps.discussion.views import get_threads
 import django_comment_client.utils as utils
 from xml.dom.minidom import parse, parseString
 from create_site.models import EdvayInstance
+import xml.etree.ElementTree as ET
 
 log = logging.getLogger("edx.student")
 AUDIT_LOG = logging.getLogger("audit")
@@ -877,6 +878,8 @@ def dashboard(request):
         temptext['coursename'] = firstcourseContent.display_name
         temptext['id'] = firstcourseContent.id
         temptext['textbooks'] = firstcourseContent.pdf_textbooks
+        temptext['recordings'] = get_recordings(request,firstcourse)
+        publish_recordings(request,firstcourse)
         checkMeetingStatus = isMeetingRunning(request,firstcourse)
         if checkMeetingStatus:
             if checkMeetingStatus['returncode'] == 'SUCCESS':
@@ -1097,23 +1100,20 @@ def bbb_wrap_load_file(url):
     timeout = 10
     socket.setdefaulttimeout(timeout)
     try:
-        req = urllib2.urlopen(url)
+        req = urllib2.urlopen(url)        
         return parse(req)
-    except:
+    except:        
         return False    
 
 def assign2Dict(xml):
     try:
-        mapping = {}
-        response = xml.firstChild
-        for child in response.childNodes:
-            print child
+        mapping = {}        
+        response = xml.firstChild        
+        for child in response.childNodes:                  
             if( child.hasChildNodes() ):
-                print 'node value' + child.firstChild.nodeValue
                 mapping[child.tagName] = child.firstChild.nodeValue
             else:
                 mapping[child.tagName] = None
-                                
         return mapping
     except:
         return False
@@ -1127,7 +1127,7 @@ def isMeetingRunning(request, course_id):
         meeting_counter = edvayinstance.meeting_counter
     except EdvayInstance.DoesNotExist:
         pass
-    meetingID = str(course_id) + str(meeting_counter)
+    meetingID = str(course_id) + str(meeting_counter)    
     url_join = settings.BIGBLUEBUTTON_SERVER + "api/isMeetingRunning?"    
     parameters = {
                   
@@ -1139,9 +1139,67 @@ def isMeetingRunning(request, course_id):
     final_url = url_join + parameters + '&checksum=' + hashlib.sha1("isMeetingRunning" + parameters + settings.BIGBLUEBUTTON_SALT).hexdigest()
   
     xml = bbb_wrap_load_file(final_url)
-
     if(xml):
         return assign2Dict(xml)
+
+
+
+def publish_recordings(request, course_id):
+    meeting_counter = 0
+    try:
+        edvayinstance =  EdvayInstance.objects.get(org_name=course_id.org)
+        meeting_counter = edvayinstance.meeting_counter
+    except EdvayInstance.DoesNotExist:
+        pass
+    meetingID = str(course_id) + str(meeting_counter)
+    url_join = settings.BIGBLUEBUTTON_SERVER + "api/publishRecordings?"    
+    parameters = {
+                  
+                  'meetingID' : meetingID ,
+                
+
+                  }    
+    parameters = urllib.urlencode(parameters)
+    final_url = url_join + parameters + '&checksum=' + hashlib.sha1("publishRecordings" + parameters + settings.BIGBLUEBUTTON_SALT).hexdigest()
+  
+    xml = bbb_wrap_load_file(final_url)
+    if(xml):
+        return assign2Dict(xml)
+
+def get_recordings(request, course_id):
+    meeting_counter = 0
+    try:
+        edvayinstance =  EdvayInstance.objects.get(org_name=course_id.org)
+        meeting_counter = edvayinstance.meeting_counter
+    except EdvayInstance.DoesNotExist:
+        pass
+    meetingID = str(course_id) + str(meeting_counter)
+    url_join = settings.BIGBLUEBUTTON_SERVER + "api/getRecordings?"    
+    parameters = {                 
+              
+                    'meetingID' : meetingID ,
+
+                  }    
+    parameters = urllib.urlencode(parameters)
+    final_url = url_join + parameters + '&checksum=' + hashlib.sha1("getRecordings" + parameters + settings.BIGBLUEBUTTON_SALT).hexdigest()
+  
+    # xml = bbb_wrap_load_file(final_url)
+    xml = parseString('<response><returncode>SUCCESS</returncode><recordings><recording><recordID>183f0bf3a0982a127bdb8161-1308597520</recordID><meetingID>EdX Demonstration Course</meetingID><name><![CDATA[On-line session for CS 101]]></name><published>false</published><state>unpublished</state><startTime>34545465656</startTime><endTime>34575565465</endTime><participants>3</participants><playback><format><type>presentation</type><url>http://server.com/presentation/playback?recordID=183f0bf3a0982a127bdb8161-1</url><length>62</length><preview><images><image width="176" height="136" alt="Welcome to">http://server.com/presentation/183f0bf3a0982a127bdb8161-1.../presentation/d2d9a672040fbde2a47a10bf6c37b6a4b5ae187f-1472495280413/thumbnails/thumb-1.png</image></images></preview></format></playback></recording><recording><recordID>183f0bf3a0982a127bdb8161-13085974450</recordID><meetingID>CS102</meetingID></recording></recordings><messageKey/><message/></response>')
+    root = ET.fromstring('<response><returncode>SUCCESS</returncode><recordings><recording><recordID>183f0bf3a0982a127bdb8161-1308597520</recordID><meetingID>EdX Demonstration Course</meetingID><name><![CDATA[On-line session for CS 101]]></name><published>false</published><state>unpublished</state><startTime>34545465656</startTime><endTime>34575565465</endTime><participants>3</participants><playback><format><type>presentation</type><url>http://server.com/presentation/playback?recordID=183f0bf3a0982a127bdb8161-1</url><length>62</length><preview><images><image width="176" height="136" alt="Welcome to">http://server.com/presentation/183f0bf3a0982a127bdb8161-1.../presentation/d2d9a672040fbde2a47a10bf6c37b6a4b5ae187f-1472495280413/thumbnails/thumb-1.png</image></images></preview></format></playback></recording><recording><recordID>183f0bf3a0982a127bdb8161-13085974450</recordID><meetingID>CS102</meetingID></recording></recordings><messageKey/><message/></response>')
+    recordings = root.find('recordings')
+    return recordings.findall('recording')
+    # if(xml):
+    #     print 'xml getrecordings'
+    #     print xml.toprettyxml()
+    #     recordings = xmldom2dict(xml)
+    #     print recordings
+    #     if recordings:
+    #         if recordings['#document']['response']['recordings']:             
+    #             return recordings['#document']['response']['recordings']
+    #     else:
+    #         return 'ERROR'
+            
+
 
 @login_required
 @ensure_csrf_cookie
@@ -1162,7 +1220,7 @@ def joinBBB(request, course_id):
             edvayinstance.save()  
         except EdvayInstance.DoesNotExist:
             pass            
-        meetingID = str(course_id) + str(meeting_counter)         
+        meetingID = str(course_id) + str(meeting_counter)
         parameters = {
                       'name' : course.display_name ,  
                       'meetingID' : meetingID ,

@@ -90,7 +90,7 @@ from .component import ADVANCED_COMPONENT_TYPES
 from .item import create_xblock_info
 from .library import LIBRARIES_ENABLED, get_library_creator_status
 
-from lms.djangoapps.create_site.models import EdvayInstance
+from create_site.models import EdvayInstance
 
 log = logging.getLogger(__name__)
 

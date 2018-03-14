@@ -870,10 +870,12 @@ def dashboard(request):
         firstcourseContent = modulestore().get_course(firstcourse)
         course_updates_module = get_course_info_section_module(request,request.user,firstcourseContent, 'updates')
         tempUpdates = get_course_update_items(course_updates_module)
+        print tempUpdates
 
         for temp in tempUpdates:
             temp['coursename'] =  firstcourseContent.display_name
         update_items.extend(tempUpdates)        
+
         temptext = {}
         temptext['coursename'] = firstcourseContent.display_name
         temptext['id'] = firstcourseContent.id
@@ -1229,6 +1231,7 @@ def joinBBB(request, course_id):
                       'attendeePW' : 'ap',
                       'moderatorPW' : 'mp',
                       'logoutURL': 'http://indus.edvay.com',
+                      'record': 'true',
                       }    
         parameters = urllib.urlencode(parameters)
         final_url = url_join + parameters + '&checksum=' + hashlib.sha1("create" + parameters + settings.BIGBLUEBUTTON_SALT).hexdigest()

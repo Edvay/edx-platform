@@ -866,6 +866,8 @@ def dashboard(request):
     handout_items = {}
     discussion_threads = []
     course_bbb = []
+    dashboard_element_availablity = {}
+    dashboard_element_availablity['recordings'] = False
     for firstcourse in show_courseware_links_for:
         firstcourseContent = modulestore().get_course(firstcourse)
         course_updates_module = get_course_info_section_module(request,request.user,firstcourseContent, 'updates')
@@ -881,6 +883,8 @@ def dashboard(request):
         temptext['id'] = firstcourseContent.id
         temptext['textbooks'] = firstcourseContent.pdf_textbooks
         temptext['recordings'] = get_recordings(request,firstcourse)
+        if temptext['recordings']:
+            dashboard_element_availablity['recordings']  = dashboard_element_availablity['recordings'] or True          
         publish_recordings(request,firstcourse)
         checkMeetingStatus = isMeetingRunning(request,firstcourse)
         if checkMeetingStatus:
@@ -1085,7 +1089,8 @@ def dashboard(request):
         'discussion_threads':discussion_threads,
         'course_bbb':course_bbb,
         'updates_to_show':updates_to_show,
-    }
+        'dashboard_element_availability':dashboard_element_availablity,
+        }
 
     ecommerce_service = EcommerceService()
     if ecommerce_service.is_enabled(request.user):
@@ -1186,9 +1191,10 @@ def get_recordings(request, course_id):
     parameters = urllib.urlencode(parameters)
     final_url = url_join + parameters + '&checksum=' + hashlib.sha1("getRecordings" + parameters + settings.BIGBLUEBUTTON_SALT).hexdigest()
   
-    # xml = bbb_wrap_load_file(final_url)
-    xml = parseString('<response><returncode>SUCCESS</returncode><recordings><recording><recordID>183f0bf3a0982a127bdb8161-1308597520</recordID><meetingID>EdX Demonstration Course</meetingID><name><![CDATA[On-line session for CS 101]]></name><published>false</published><state>unpublished</state><startTime>34545465656</startTime><endTime>34575565465</endTime><participants>3</participants><playback><format><type>presentation</type><url>http://server.com/presentation/playback?recordID=183f0bf3a0982a127bdb8161-1</url><length>62</length><preview><images><image width="176" height="136" alt="Welcome to">http://server.com/presentation/183f0bf3a0982a127bdb8161-1.../presentation/d2d9a672040fbde2a47a10bf6c37b6a4b5ae187f-1472495280413/thumbnails/thumb-1.png</image></images></preview></format></playback></recording><recording><recordID>183f0bf3a0982a127bdb8161-13085974450</recordID><meetingID>CS102</meetingID></recording></recordings><messageKey/><message/></response>')
-    root = ET.fromstring('<response><returncode>SUCCESS</returncode><recordings><recording><recordID>183f0bf3a0982a127bdb8161-1308597520</recordID><meetingID>EdX Demonstration Course</meetingID><name><![CDATA[On-line session for CS 101]]></name><published>false</published><state>unpublished</state><startTime>34545465656</startTime><endTime>34575565465</endTime><participants>3</participants><playback><format><type>presentation</type><url>http://server.com/presentation/playback?recordID=183f0bf3a0982a127bdb8161-1</url><length>62</length><preview><images><image width="176" height="136" alt="Welcome to">http://server.com/presentation/183f0bf3a0982a127bdb8161-1.../presentation/d2d9a672040fbde2a47a10bf6c37b6a4b5ae187f-1472495280413/thumbnails/thumb-1.png</image></images></preview></format></playback></recording><recording><recordID>183f0bf3a0982a127bdb8161-13085974450</recordID><meetingID>CS102</meetingID></recording></recordings><messageKey/><message/></response>')
+    xml = bbb_wrap_load_file(final_url)
+    #xml = parseString('<response><returncode>SUCCESS</returncode><recordings><recording><recordID>183f0bf3a0982a127bdb8161-1308597520</recordID><meetingID>EdX Demonstration Course</meetingID><name><![CDATA[On-line session for CS 101]]></name><published>false</published><state>unpublished</state><startTime>34545465656</startTime><endTime>34575565465</endTime><participants>3</participants><playback><format><type>presentation</type><url>http://server.com/presentation/playback?recordID=183f0bf3a0982a127bdb8161-1</url><length>62</length><preview><images><image width="176" height="136" alt="Welcome to">http://server.com/presentation/183f0bf3a0982a127bdb8161-1.../presentation/d2d9a672040fbde2a47a10bf6c37b6a4b5ae187f-1472495280413/thumbnails/thumb-1.png</image></images></preview></format></playback></recording><recording><recordID>183f0bf3a0982a127bdb8161-13085974450</recordID><meetingID>CS102</meetingID></recording></recordings><messageKey/><message/></response>')
+    #root = ET.fromstring('<response><returncode>SUCCESS</returncode><recordings><recording><recordID>183f0bf3a0982a127bdb8161-1308597520</recordID><meetingID>EdX Demonstration Course</meetingID><name><![CDATA[On-line session for CS 101]]></name><published>false</published><state>unpublished</state><startTime>34545465656</startTime><endTime>34575565465</endTime><participants>3</participants><playback><format><type>presentation</type><url>http://server.com/presentation/playback?recordID=183f0bf3a0982a127bdb8161-1</url><length>62</length><preview><images><image width="176" height="136" alt="Welcome to">http://server.com/presentation/183f0bf3a0982a127bdb8161-1.../presentation/d2d9a672040fbde2a47a10bf6c37b6a4b5ae187f-1472495280413/thumbnails/thumb-1.png</image></images></preview></format></playback></recording><recording><recordID>183f0bf3a0982a127bdb8161-13085974450</recordID><meetingID>CS102</meetingID></recording></recordings><messageKey/><message/></response>')
+    root = ET.fromstring(xml.toxml("utf-8"))
     recordings = root.find('recordings')
     return recordings.findall('recording')
     # if(xml):

@@ -9,7 +9,7 @@ import uuid
 import warnings
 from collections import defaultdict, namedtuple
 from urlparse import parse_qs, urlsplit, urlunsplit
-
+import time
 import analytics
 import edx_oauth2_provider
 from django.conf import settings
@@ -868,21 +868,29 @@ def dashboard(request):
     course_bbb = []
     dashboard_element_availablity = {}
     dashboard_element_availablity['recordings'] = False
+    allrecordings = get_recordings(request)
+    org_recordings = []
     for firstcourse in show_courseware_links_for:
         firstcourseContent = modulestore().get_course(firstcourse)
         course_updates_module = get_course_info_section_module(request,request.user,firstcourseContent, 'updates')
-        tempUpdates = get_course_update_items(course_updates_module)
+        tempUpdates = get_course_update_items(course_updates_module)       
+
         for temp in tempUpdates:
             temp['coursename'] =  firstcourseContent.display_name
-        update_items.extend(tempUpdates)
-      
+        update_items.extend(tempUpdates)        
+
         temptext = {}
         temptext['coursename'] = firstcourseContent.display_name
         temptext['id'] = firstcourseContent.id
-        temptext['textbooks'] = firstcourseContent.pdf_textbooks
-        temptext['recordings'] = get_recordings(request,firstcourse)
+        temptext['textbooks'] = firstcourseContent.pdf_textbooks        
+        temptext['recordings'] = get_recordings(request) 
         if temptext['recordings']:
-            dashboard_element_availablity['recordings']  = dashboard_element_availablity['recordings'] or True          
+            dashboard_element_availablity['recordings']  = dashboard_element_availablity['recordings'] or True        
+        for recording in allrecordings:
+            if str(firstcourse) in recording.find('meetingID').text:
+                org_recordings.append(recording)
+                startTime = int(recording.find('startTime').text)/1000
+                               
         publish_recordings(request,firstcourse)
         checkMeetingStatus = isMeetingRunning(request,firstcourse)
         if checkMeetingStatus:
@@ -1086,8 +1094,10 @@ def dashboard(request):
         'handout_items':handout_items,
         'discussion_threads':discussion_threads,
         'course_bbb':course_bbb,
+        'updates_to_show':updates_to_show,
         'dashboard_element_availability':dashboard_element_availablity,
-    }
+        'org_recordings':org_recordings
+        }
 
     ecommerce_service = EcommerceService()
     if ecommerce_service.is_enabled(request.user):
@@ -1171,22 +1181,9 @@ def publish_recordings(request, course_id):
     if(xml):
         return assign2Dict(xml)
 
-def get_recordings(request, course_id):
-    meeting_counter = 0
-    try:
-        edvayinstance =  EdvayInstance.objects.get(org_name=course_id.org)
-        meeting_counter = edvayinstance.meeting_counter
-    except EdvayInstance.DoesNotExist:
-        pass
-    meetingID = str(course_id) + str(meeting_counter)
+def get_recordings(request):
     url_join = settings.BIGBLUEBUTTON_SERVER + "api/getRecordings?"    
-    parameters = {                 
-              
-                    'meetingID' : meetingID ,
-
-                  }    
-    parameters = urllib.urlencode(parameters)
-    final_url = url_join + parameters + '&checksum=' + hashlib.sha1("getRecordings" + parameters + settings.BIGBLUEBUTTON_SALT).hexdigest()
+    final_url = url_join + 'checksum=' + hashlib.sha1("getRecordings" + settings.BIGBLUEBUTTON_SALT).hexdigest()
   
     xml = bbb_wrap_load_file(final_url)
     #xml = parseString('<response><returncode>SUCCESS</returncode><recordings><recording><recordID>183f0bf3a0982a127bdb8161-1308597520</recordID><meetingID>EdX Demonstration Course</meetingID><name><![CDATA[On-line session for CS 101]]></name><published>false</published><state>unpublished</state><startTime>34545465656</startTime><endTime>34575565465</endTime><participants>3</participants><playback><format><type>presentation</type><url>http://server.com/presentation/playback?recordID=183f0bf3a0982a127bdb8161-1</url><length>62</length><preview><images><image width="176" height="136" alt="Welcome to">http://server.com/presentation/183f0bf3a0982a127bdb8161-1.../presentation/d2d9a672040fbde2a47a10bf6c37b6a4b5ae187f-1472495280413/thumbnails/thumb-1.png</image></images></preview></format></playback></recording><recording><recordID>183f0bf3a0982a127bdb8161-13085974450</recordID><meetingID>CS102</meetingID></recording></recordings><messageKey/><message/></response>')
@@ -1233,9 +1230,8 @@ def joinBBB(request, course_id):
                       'fullName' : user.username,
                       'attendeePW' : 'ap',
                       'moderatorPW' : 'mp',
-                      'logoutURL': 'http://indus.edvay.com/',
-                      'record':'true'
-
+                      'logoutURL': 'http://indus.edvay.com',
+                      'record': 'true',
                       }    
         parameters = urllib.urlencode(parameters)
         final_url = url_join + parameters + '&checksum=' + hashlib.sha1("create" + parameters + settings.BIGBLUEBUTTON_SALT).hexdigest()

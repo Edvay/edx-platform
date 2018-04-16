@@ -1049,7 +1049,12 @@ def dashboard(request):
 
     valid_verification_statuses = ['approved', 'must_reverify', 'pending', 'expired']
     display_sidebar_on_dashboard = len(order_history_list) or verification_status in valid_verification_statuses
-
+    calendar_link = 'https://calendar.google.com/calendar/embed?src=5nrhk8r0npic907jgble6ld4qo%40group.calendar.google.com&ctz=Asia%2FCalcutta'    
+    try:
+            edvayinstance =  EdvayInstance.objects.get(user=user)
+            calendar_link = edvayinstance.calendar_link            
+    except EdvayInstance.DoesNotExist:
+            pass
     context = {
         'enterprise_message': enterprise_message,
         'enrollment_message': enrollment_message,
@@ -1096,7 +1101,8 @@ def dashboard(request):
         'course_bbb':course_bbb,
         'updates_to_show':updates_to_show,
         'dashboard_element_availability':dashboard_element_availablity,
-        'org_recordings':org_recordings
+        'org_recordings':org_recordings,
+        'calendar_link':calendar_link,
         }
 
     ecommerce_service = EcommerceService()

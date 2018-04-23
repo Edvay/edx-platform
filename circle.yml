@@ -22,6 +22,7 @@ dependencies:
     - pip install --exists-action w -r requirements/edx/pre.txt
     - pip install --exists-action w -r requirements/edx/github.txt
     - pip install --exists-action w -r requirements/edx/local.txt
+    - pip install --exists-action w -r requirements/indus/requirements.txt
 
     # HACK: within base.txt stevedore had a
     # dependency on a version range of pbr.

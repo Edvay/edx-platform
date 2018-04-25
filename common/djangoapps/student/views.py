@@ -61,6 +61,28 @@ from certificates.models import (  # pylint: disable=import-error
     certificate_status_for_student
 )
 from course_modes.models import CourseMode
+from courseware.access import has_access, has_ccx_coach_role
+from courseware.access_response import StartDateError
+from courseware.access_utils import in_preview_mode, is_course_open_for_learner
+from courseware.courses import (
+    get_course,
+    get_course_by_id,
+    get_course_overview_with_access,
+    get_course_with_access,
+    get_courses,
+    get_current_child,
+    get_permission_for_course_about,
+    get_studio_url,
+    sort_by_announcement,
+    sort_by_start_date
+)
+from courseware.date_summary import VerifiedUpgradeDeadlineDate
+from courseware.masquerade import setup_masquerade
+from courseware.model_data import FieldDataCache
+from courseware.models import BaseStudentModuleHistory, StudentModule
+from courseware.url_helpers import get_redirect_url
+from courseware.user_state_client import DjangoXBlockUserStateClient
+from course_modes.models import CourseMode
 from courseware.access import has_access
 from courseware.courses import get_courses, sort_by_announcement, sort_by_start_date  # pylint: disable=import-error
 from django_comment_common.models import assign_role
@@ -757,19 +779,17 @@ def dashboard(request):
     # Let's filter out any courses in an "org" that has been declared to be
     # in a configuration
     org_filter_out_set = configuration_helpers.get_all_orgs()
-
     # Remove current site orgs from the "filter out" list, if applicable.
     # We want to filter and only show enrollments for courses within
     # the organizations defined in configuration for the current site.
     course_org_filter = configuration_helpers.get_current_site_orgs()
     if course_org_filter:
         org_filter_out_set = org_filter_out_set - set(course_org_filter)
-
+      
     # Build our (course, enrollment) list for the user, but ignore any courses that no
     # longer exist (because the course IDs have changed). Still, we don't delete those
     # enrollments, because it could have been a data push snafu.
     course_enrollments = list(get_course_enrollments(user, course_org_filter, org_filter_out_set))
-
     # Record how many courses there are so that we can get a better
     # understanding of usage patterns on prod.
     monitoring_utils.accumulate('num_courses', len(course_enrollments))
@@ -787,7 +807,7 @@ def dashboard(request):
         }
         for course_id, modes in unexpired_course_modes.iteritems()
     }
-
+       
     # Check to see if the student has recently enrolled in a course.
     # If so, display a notification message confirming the enrollment.
     enrollment_message = _create_recent_enrollment_message(
@@ -866,6 +886,7 @@ def dashboard(request):
     handout_items = {}
     discussion_threads = []
     course_bbb = []
+    course_bbbb= []
     dashboard_element_availablity = {}
     dashboard_element_availablity['recordings'] = False
     allrecordings = get_recordings(request)
@@ -886,10 +907,14 @@ def dashboard(request):
         temptext['recordings'] = get_recordings(request) 
         if temptext['recordings']:
             dashboard_element_availablity['recordings']  = dashboard_element_availablity['recordings'] or True        
-        for recording in allrecordings:
-            if str(firstcourse) in recording.find('meetingID').text:
-                org_recordings.append(recording)
-                startTime = int(recording.find('startTime').text)/1000
+
+       
+        if allrecordings:
+                for recording in allrecordings:
+                    if str(firstcourse) in recording.find('meetingID').text:
+                        org_recordings.append(recording)
+                        startTime = int(recording.find('startTime').text)/1000
+
                                
         publish_recordings(request,firstcourse)
         checkMeetingStatus = isMeetingRunning(request,firstcourse)
@@ -905,7 +930,7 @@ def dashboard(request):
             temptext['isLive'] = False                 
 
         course_bbb.append(temptext)
-
+        
         if temptext['textbooks']:
             textbooks.append(temptext)
 
@@ -961,6 +986,32 @@ def dashboard(request):
         for enrollment in course_enrollments
 }
    ##indus dashboard changes end
+    total_list=[]
+    tot={}
+    course_key = enrolled_course_ids   
+    for courses in course_key:
+        course_grade = CourseGradeFactory().create(user,course_key=courses)
+        courseContent = modulestore().get_course(courses)
+        courseware_summary = course_grade.chapter_grades.values()
+        total_earned=0
+        total_possible=0
+        for chapter in courseware_summary:
+            for section in chapter['sections']:
+                earned = section.all_total.earned
+                total_earned=earned+total_earned
+                total = section.all_total.possible
+                total_possible = total+total_possible        
+        
+        courseContent = modulestore().get_course(courses)                
+        if total_earned == 0 and total_possible == 0:        
+            total_possible = 0 
+            tot[courseContent.display_name]=total_earned = 0   
+        else:
+            m=float(total_earned)/total_possible
+            k = m*100
+            tot[courseContent.display_name]=int(k)
+        
+           
     # Determine the per-course verification status
     # This is a dictionary in which the keys are course locators
     # and the values are one of:
@@ -1049,7 +1100,13 @@ def dashboard(request):
 
     valid_verification_statuses = ['approved', 'must_reverify', 'pending', 'expired']
     display_sidebar_on_dashboard = len(order_history_list) or verification_status in valid_verification_statuses
-
+    calendar_link = 'https://calendar.google.com/calendar/embed?src=5nrhk8r0npic907jgble6ld4qo%40group.calendar.google.com&ctz=Asia%2FCalcutta'    
+    try:
+            edvayinstance =  EdvayInstance.objects.get(user=user)
+            calendar_link = edvayinstance.calendar_link  
+            
+    except EdvayInstance.DoesNotExist:
+            pass
     context = {
         'enterprise_message': enterprise_message,
         'enrollment_message': enrollment_message,
@@ -1096,7 +1153,10 @@ def dashboard(request):
         'course_bbb':course_bbb,
         'updates_to_show':updates_to_show,
         'dashboard_element_availability':dashboard_element_availablity,
-        'org_recordings':org_recordings
+        'org_recordings':org_recordings,
+        'calendar_link':calendar_link,
+        'courseware_summary':courseware_summary,
+        'total_list':tot,
         }
 
     ecommerce_service = EcommerceService()
@@ -1188,9 +1248,12 @@ def get_recordings(request):
     xml = bbb_wrap_load_file(final_url)
     #xml = parseString('<response><returncode>SUCCESS</returncode><recordings><recording><recordID>183f0bf3a0982a127bdb8161-1308597520</recordID><meetingID>EdX Demonstration Course</meetingID><name><![CDATA[On-line session for CS 101]]></name><published>false</published><state>unpublished</state><startTime>34545465656</startTime><endTime>34575565465</endTime><participants>3</participants><playback><format><type>presentation</type><url>http://server.com/presentation/playback?recordID=183f0bf3a0982a127bdb8161-1</url><length>62</length><preview><images><image width="176" height="136" alt="Welcome to">http://server.com/presentation/183f0bf3a0982a127bdb8161-1.../presentation/d2d9a672040fbde2a47a10bf6c37b6a4b5ae187f-1472495280413/thumbnails/thumb-1.png</image></images></preview></format></playback></recording><recording><recordID>183f0bf3a0982a127bdb8161-13085974450</recordID><meetingID>CS102</meetingID></recording></recordings><messageKey/><message/></response>')
     #root = ET.fromstring('<response><returncode>SUCCESS</returncode><recordings><recording><recordID>183f0bf3a0982a127bdb8161-1308597520</recordID><meetingID>EdX Demonstration Course</meetingID><name><![CDATA[On-line session for CS 101]]></name><published>false</published><state>unpublished</state><startTime>34545465656</startTime><endTime>34575565465</endTime><participants>3</participants><playback><format><type>presentation</type><url>http://server.com/presentation/playback?recordID=183f0bf3a0982a127bdb8161-1</url><length>62</length><preview><images><image width="176" height="136" alt="Welcome to">http://server.com/presentation/183f0bf3a0982a127bdb8161-1.../presentation/d2d9a672040fbde2a47a10bf6c37b6a4b5ae187f-1472495280413/thumbnails/thumb-1.png</image></images></preview></format></playback></recording><recording><recordID>183f0bf3a0982a127bdb8161-13085974450</recordID><meetingID>CS102</meetingID></recording></recordings><messageKey/><message/></response>')
-    root = ET.fromstring(xml.toxml("utf-8"))
-    recordings = root.find('recordings')
-    return recordings.findall('recording')
+    if xml:
+        root = ET.fromstring(xml.toxml("utf-8"))
+        recordings = root.find('recordings')
+        return recordings.findall('recording')
+    else:
+        return None    
     # if(xml):
     #     print 'xml getrecordings'
     #     print xml.toprettyxml()

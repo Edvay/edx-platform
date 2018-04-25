@@ -857,7 +857,7 @@ def program_marketing(request, program_uuid):
 def progress(request, course_id, student_id=None):
     """ Display the progress page. """
     course_key = CourseKey.from_string(course_id)
-
+    print'cccccccccccccccccccccccyyyyyyyyyyyyy',course_key
     with modulestore().bulk_operations(course_key):
         return _progress(request, course_key, student_id)
 
@@ -879,7 +879,6 @@ def _progress(request, course_key, student_id):
             raise Http404
 
     course = get_course_with_access(request.user, 'load', course_key)
-
     staff_access = bool(has_access(request.user, 'staff', course))
 
     masquerade = None
@@ -917,11 +916,9 @@ def _progress(request, course_key, student_id):
 
     # NOTE: To make sure impersonation by instructor works, use
     # student instead of request.user in the rest of the function.
-
     course_grade = CourseGradeFactory().create(student, course)
     courseware_summary = course_grade.chapter_grades.values()
     grade_summary = course_grade.summary
-
     studio_url = get_studio_url(course, 'settings/grading')
 
     # checking certificate generation configuration

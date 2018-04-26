@@ -61,6 +61,28 @@ from certificates.models import (  # pylint: disable=import-error
     certificate_status_for_student
 )
 from course_modes.models import CourseMode
+from courseware.access import has_access, has_ccx_coach_role
+from courseware.access_response import StartDateError
+from courseware.access_utils import in_preview_mode, is_course_open_for_learner
+from courseware.courses import (
+    get_course,
+    get_course_by_id,
+    get_course_overview_with_access,
+    get_course_with_access,
+    get_courses,
+    get_current_child,
+    get_permission_for_course_about,
+    get_studio_url,
+    sort_by_announcement,
+    sort_by_start_date
+)
+from courseware.date_summary import VerifiedUpgradeDeadlineDate
+from courseware.masquerade import setup_masquerade
+from courseware.model_data import FieldDataCache
+from courseware.models import BaseStudentModuleHistory, StudentModule
+from courseware.url_helpers import get_redirect_url
+from courseware.user_state_client import DjangoXBlockUserStateClient
+from course_modes.models import CourseMode
 from courseware.access import has_access
 from courseware.courses import get_courses, sort_by_announcement, sort_by_start_date  # pylint: disable=import-error
 from django_comment_common.models import assign_role
@@ -703,7 +725,7 @@ def get_last_accessed_courseware(course, request, user):
     Return the courseware module URL that the user last accessed,
     or None if it cannot be found.
     """
-   
+
     field_data_cache = FieldDataCache.cache_for_descriptor_descendents(
         course.id, request.user, course, depth=2
     )
@@ -757,7 +779,6 @@ def dashboard(request):
     # Let's filter out any courses in an "org" that has been declared to be
     # in a configuration
     org_filter_out_set = configuration_helpers.get_all_orgs()
-
     # Remove current site orgs from the "filter out" list, if applicable.
     # We want to filter and only show enrollments for courses within
     # the organizations defined in configuration for the current site.
@@ -769,7 +790,6 @@ def dashboard(request):
     # longer exist (because the course IDs have changed). Still, we don't delete those
     # enrollments, because it could have been a data push snafu.
     course_enrollments = list(get_course_enrollments(user, course_org_filter, org_filter_out_set))
-
     # Record how many courses there are so that we can get a better
     # understanding of usage patterns on prod.
     monitoring_utils.accumulate('num_courses', len(course_enrollments))
@@ -866,6 +886,7 @@ def dashboard(request):
     handout_items = {}
     discussion_threads = []
     course_bbb = []
+    course_bbbb= []
     dashboard_element_availablity = {}
     dashboard_element_availablity['recordings'] = False
     allrecordings = get_recordings(request)
@@ -873,24 +894,25 @@ def dashboard(request):
     for firstcourse in show_courseware_links_for:
         firstcourseContent = modulestore().get_course(firstcourse)
         course_updates_module = get_course_info_section_module(request,request.user,firstcourseContent, 'updates')
-        tempUpdates = get_course_update_items(course_updates_module)       
+        tempUpdates = get_course_update_items(course_updates_module)
 
         for temp in tempUpdates:
             temp['coursename'] =  firstcourseContent.display_name
-        update_items.extend(tempUpdates)        
-
+        update_items.extend(tempUpdates)
         temptext = {}
         temptext['coursename'] = firstcourseContent.display_name
         temptext['id'] = firstcourseContent.id
-        temptext['textbooks'] = firstcourseContent.pdf_textbooks        
-        temptext['recordings'] = get_recordings(request) 
+        temptext['textbooks'] = firstcourseContent.pdf_textbooks
+        temptext['recordings'] = get_recordings(request)
         if temptext['recordings']:
-            dashboard_element_availablity['recordings']  = dashboard_element_availablity['recordings'] or True        
-        for recording in allrecordings:
-            if str(firstcourse) in recording.find('meetingID').text:
-                org_recordings.append(recording)
-                startTime = int(recording.find('startTime').text)/1000
-                               
+            dashboard_element_availablity['recordings']  = dashboard_element_availablity['recordings'] or True
+
+        if allrecordings:
+                for recording in allrecordings:
+                    if str(firstcourse) in recording.find('meetingID').text:
+                        org_recordings.append(recording)
+                        startTime = int(recording.find('startTime').text)/1000
+
         publish_recordings(request,firstcourse)
         checkMeetingStatus = isMeetingRunning(request,firstcourse)
         if checkMeetingStatus:
@@ -900,9 +922,9 @@ def dashboard(request):
                 else:
                     temptext['isLive'] = False
             else:
-                temptext['isLive'] = False 
+                temptext['isLive'] = False
         else:
-            temptext['isLive'] = False                 
+            temptext['isLive'] = False
 
         course_bbb.append(temptext)
 
@@ -918,12 +940,12 @@ def dashboard(request):
         userDiscussion = cc.User.from_django_user(request.user)
         user_info = userDiscussion.to_dict()
         try:
-            unsafethreads,query_params = get_threads(request, firstcourseContent, user_info)   
-            is_staff = False           
+            unsafethreads,query_params = get_threads(request, firstcourseContent, user_info)
+            is_staff = False
             threads = [utils.prepare_content(thread, firstcourseContent.id, is_staff) for thread in unsafethreads]
             for thread in threads:
                 thread['coursename'] = firstcourseContent.display_name
-       
+
             discussion_threads.extend(threads)
         except cc.utils.CommentClientMaintenanceError:
             log.warning("Forum is in maintenance mode")
@@ -932,35 +954,61 @@ def dashboard(request):
                 'uses_pattern_library': True,
             })
         except ValueError:
-            return HttpResponseBadRequest("Invalid group_id")        
-    
- 
+            return HttpResponseBadRequest("Invalid group_id")
+
+
     updates_to_show = [
-        update for update in update_items       
+        update for update in update_items
         if update.get("status") != "deleted"
-     ]     
-    
+     ]
+
     profile = UserProfile.objects.get(user=user)
     last_accessed_name = None
     last_accessed_url = '/'
     meta = profile.get_meta()
 
     last_accessed_name = None
-    last_accessed_url = None    
+    last_accessed_url = None
     if 'last_accessed_course' in meta:
         course_id = meta['last_accessed_course']
         course_key = CourseKey.from_string(unicode(course_id))
-        last_accessed_url = get_last_accessed_courseware(modulestore().get_course(course_key),request, request.user)    
+        last_accessed_url = get_last_accessed_courseware(modulestore().get_course(course_key),request, request.user)
         last_accessed_name = 'Demo'
     if not last_accessed_url:
         last_accessed_url = '' #reverse('info', args=[unicode(course_enrollments[0].course_overview.id)])
-    
+
     verify_status_by_course = check_verify_status_by_course(user, course_enrollments)
     cert_statuses = {
         enrollment.course_id: cert_info(request.user, enrollment.course_overview, enrollment.mode)
         for enrollment in course_enrollments
 }
    ##indus dashboard changes end
+    total_list=[]
+    tot={}
+    course_key = enrolled_course_ids
+    for courses in course_key:
+        course_grade = CourseGradeFactory().create(user,course_key=courses)
+        courseContent = modulestore().get_course(courses)
+        courseware_summary = course_grade.chapter_grades.values()
+        total_earned=0
+        total_possible=0
+        for chapter in courseware_summary:
+            for section in chapter['sections']:
+                earned = section.all_total.earned
+                total_earned=earned+total_earned
+                total = section.all_total.possible
+                total_possible = total+total_possible
+
+        courseContent = modulestore().get_course(courses)
+        if total_earned == 0 and total_possible == 0:
+            total_possible = 0
+            tot[courseContent.display_name]=total_earned = 0
+        else:
+            m=float(total_earned)/total_possible
+            k = m*100
+            tot[courseContent.display_name]=int(k)
+
+
     # Determine the per-course verification status
     # This is a dictionary in which the keys are course locators
     # and the values are one of:
@@ -1049,7 +1097,13 @@ def dashboard(request):
 
     valid_verification_statuses = ['approved', 'must_reverify', 'pending', 'expired']
     display_sidebar_on_dashboard = len(order_history_list) or verification_status in valid_verification_statuses
+    calendar_link = 'https://calendar.google.com/calendar/embed?src=5nrhk8r0npic907jgble6ld4qo%40group.calendar.google.com&ctz=Asia%2FCalcutta'
+    try:
+            edvayinstance =  EdvayInstance.objects.get(user=user)
+            calendar_link = edvayinstance.calendar_link
 
+    except EdvayInstance.DoesNotExist:
+            pass
     context = {
         'enterprise_message': enterprise_message,
         'enrollment_message': enrollment_message,
@@ -1096,7 +1150,13 @@ def dashboard(request):
         'course_bbb':course_bbb,
         'updates_to_show':updates_to_show,
         'dashboard_element_availability':dashboard_element_availablity,
+<<<<<<< HEAD
         'org_recordings':org_recordings
+=======
+        'org_recordings':org_recordings,
+        'calendar_link':calendar_link,
+        'total_list':tot,
+>>>>>>> indus.dashboard
         }
 
     ecommerce_service = EcommerceService()
@@ -1115,16 +1175,16 @@ def bbb_wrap_load_file(url):
     timeout = 10
     socket.setdefaulttimeout(timeout)
     try:
-        req = urllib2.urlopen(url)        
+        req = urllib2.urlopen(url)
         return parse(req)
-    except:        
-        return False    
+    except:
+        return False
 
 def assign2Dict(xml):
     try:
-        mapping = {}        
-        response = xml.firstChild        
-        for child in response.childNodes:                  
+        mapping = {}
+        response = xml.firstChild
+        for child in response.childNodes:
             if( child.hasChildNodes() ):
                 mapping[child.tagName] = child.firstChild.nodeValue
             else:
@@ -1142,17 +1202,17 @@ def isMeetingRunning(request, course_id):
         meeting_counter = edvayinstance.meeting_counter
     except EdvayInstance.DoesNotExist:
         pass
-    meetingID = str(course_id) + str(meeting_counter)    
-    url_join = settings.BIGBLUEBUTTON_SERVER + "api/isMeetingRunning?"    
+    meetingID = str(course_id) + str(meeting_counter)
+    url_join = settings.BIGBLUEBUTTON_SERVER + "api/isMeetingRunning?"
     parameters = {
-                  
-                  'meetingID' : meetingID ,
-                
 
-                  }    
+                  'meetingID' : meetingID ,
+
+
+                  }
     parameters = urllib.urlencode(parameters)
     final_url = url_join + parameters + '&checksum=' + hashlib.sha1("isMeetingRunning" + parameters + settings.BIGBLUEBUTTON_SALT).hexdigest()
-  
+
     xml = bbb_wrap_load_file(final_url)
     if(xml):
         return assign2Dict(xml)
@@ -1167,82 +1227,95 @@ def publish_recordings(request, course_id):
     except EdvayInstance.DoesNotExist:
         pass
     meetingID = str(course_id) + str(meeting_counter)
-    url_join = settings.BIGBLUEBUTTON_SERVER + "api/publishRecordings?"    
+    url_join = settings.BIGBLUEBUTTON_SERVER + "api/publishRecordings?"
     parameters = {
-                  
-                  'meetingID' : meetingID ,
-                
 
-                  }    
+                  'meetingID' : meetingID ,
+
+
+                  }
     parameters = urllib.urlencode(parameters)
     final_url = url_join + parameters + '&checksum=' + hashlib.sha1("publishRecordings" + parameters + settings.BIGBLUEBUTTON_SALT).hexdigest()
-  
+
     xml = bbb_wrap_load_file(final_url)
     if(xml):
         return assign2Dict(xml)
 
 def get_recordings(request):
-    url_join = settings.BIGBLUEBUTTON_SERVER + "api/getRecordings?"    
+<<<<<<< HEAD
+    url_join = settings.BIGBLUEBUTTON_SERVER + "api/getRecordings?"
     final_url = url_join + 'checksum=' + hashlib.sha1("getRecordings" + settings.BIGBLUEBUTTON_SALT).hexdigest()
-  
+
+=======
+    url_join = settings.BIGBLUEBUTTON_SERVER + "api/getRecordings?"
+    final_url = url_join + 'checksum=' + hashlib.sha1("getRecordings" + settings.BIGBLUEBUTTON_SALT).hexdigest()
+
+>>>>>>> indus.dashboard
     xml = bbb_wrap_load_file(final_url)
     #xml = parseString('<response><returncode>SUCCESS</returncode><recordings><recording><recordID>183f0bf3a0982a127bdb8161-1308597520</recordID><meetingID>EdX Demonstration Course</meetingID><name><![CDATA[On-line session for CS 101]]></name><published>false</published><state>unpublished</state><startTime>34545465656</startTime><endTime>34575565465</endTime><participants>3</participants><playback><format><type>presentation</type><url>http://server.com/presentation/playback?recordID=183f0bf3a0982a127bdb8161-1</url><length>62</length><preview><images><image width="176" height="136" alt="Welcome to">http://server.com/presentation/183f0bf3a0982a127bdb8161-1.../presentation/d2d9a672040fbde2a47a10bf6c37b6a4b5ae187f-1472495280413/thumbnails/thumb-1.png</image></images></preview></format></playback></recording><recording><recordID>183f0bf3a0982a127bdb8161-13085974450</recordID><meetingID>CS102</meetingID></recording></recordings><messageKey/><message/></response>')
     #root = ET.fromstring('<response><returncode>SUCCESS</returncode><recordings><recording><recordID>183f0bf3a0982a127bdb8161-1308597520</recordID><meetingID>EdX Demonstration Course</meetingID><name><![CDATA[On-line session for CS 101]]></name><published>false</published><state>unpublished</state><startTime>34545465656</startTime><endTime>34575565465</endTime><participants>3</participants><playback><format><type>presentation</type><url>http://server.com/presentation/playback?recordID=183f0bf3a0982a127bdb8161-1</url><length>62</length><preview><images><image width="176" height="136" alt="Welcome to">http://server.com/presentation/183f0bf3a0982a127bdb8161-1.../presentation/d2d9a672040fbde2a47a10bf6c37b6a4b5ae187f-1472495280413/thumbnails/thumb-1.png</image></images></preview></format></playback></recording><recording><recordID>183f0bf3a0982a127bdb8161-13085974450</recordID><meetingID>CS102</meetingID></recording></recordings><messageKey/><message/></response>')
-    root = ET.fromstring(xml.toxml("utf-8"))
-    recordings = root.find('recordings')
-    return recordings.findall('recording')
+    if xml:
+        root = ET.fromstring(xml.toxml("utf-8"))
+        recordings = root.find('recordings')
+        return recordings.findall('recording')
+    else:
+        return None
     # if(xml):
     #     print 'xml getrecordings'
     #     print xml.toprettyxml()
     #     recordings = xmldom2dict(xml)
     #     print recordings
     #     if recordings:
-    #         if recordings['#document']['response']['recordings']:             
+    #         if recordings['#document']['response']['recordings']:
     #             return recordings['#document']['response']['recordings']
     #     else:
     #         return 'ERROR'
-            
+
 
 
 @login_required
 @ensure_csrf_cookie
 def joinBBB(request, course_id):
-   
+
     user = request.user
     course_key = SlashSeparatedCourseKey.from_deprecated_string(course_id)
-    course = get_course_overview_with_access(user, 'load', course_key)   
-    
+    course = get_course_overview_with_access(user, 'load', course_key)
+
     if request.user.is_staff:
-        url_join = settings.BIGBLUEBUTTON_SERVER + "api/create?"  
-        meeting_counter = 0                
+        url_join = settings.BIGBLUEBUTTON_SERVER + "api/create?"
+        meeting_counter = 0
         try:
             edvayinstance =  EdvayInstance.objects.get(user=user)
             meeting_counter = edvayinstance.meeting_counter
             meeting_counter = meeting_counter + 1
             edvayinstance.meeting_counter = meeting_counter
-            edvayinstance.save()  
+            edvayinstance.save()
         except EdvayInstance.DoesNotExist:
-            pass            
+            pass
         meetingID = str(course_id) + str(meeting_counter)
         parameters = {
-                      'name' : course.display_name ,  
+                      'name' : course.display_name ,
                       'meetingID' : meetingID ,
                       'fullName' : user.username,
                       'attendeePW' : 'ap',
                       'moderatorPW' : 'mp',
                       'logoutURL': 'http://indus.edvay.com',
                       'record': 'true',
-                      }    
+<<<<<<< HEAD
+                      }
+=======
+                      }
+>>>>>>> indus.dashboard
         parameters = urllib.urlencode(parameters)
         final_url = url_join + parameters + '&checksum=' + hashlib.sha1("create" + parameters + settings.BIGBLUEBUTTON_SALT).hexdigest()
         bbb_wrap_load_file(final_url)
         parameters = {
-                      
+
                       'meetingID' : meetingID ,
                       'fullName' : user.username,
                       'password' : 'mp',
-                      } 
-                    
+                      }
+
     else:
         meeting_counter = 0
         try:
@@ -1252,15 +1325,15 @@ def joinBBB(request, course_id):
             pass
         meetingID = str(course_id) + str(meeting_counter)
         parameters = {
-                      
+
                       'meetingID' : meetingID ,
                       'fullName' : user.username,
                       'password' : 'ap',
-                      } 
-        
-    
-    url_join = settings.BIGBLUEBUTTON_SERVER + "api/join?"    
-      
+                      }
+
+
+    url_join = settings.BIGBLUEBUTTON_SERVER + "api/join?"
+
     parameters = urllib.urlencode(parameters)
     final_url = url_join + parameters + '&checksum=' + hashlib.sha1("join" + parameters + settings.BIGBLUEBUTTON_SALT).hexdigest()
     return HttpResponseRedirect(final_url)

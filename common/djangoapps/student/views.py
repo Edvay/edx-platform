@@ -899,6 +899,7 @@ def dashboard(request):
         for temp in tempUpdates:
             temp['coursename'] =  firstcourseContent.display_name
         update_items.extend(tempUpdates)
+
         temptext = {}
         temptext['coursename'] = firstcourseContent.display_name
         temptext['id'] = firstcourseContent.id
@@ -907,11 +908,13 @@ def dashboard(request):
         if temptext['recordings']:
             dashboard_element_availablity['recordings']  = dashboard_element_availablity['recordings'] or True
 
+
         if allrecordings:
                 for recording in allrecordings:
                     if str(firstcourse) in recording.find('meetingID').text:
                         org_recordings.append(recording)
                         startTime = int(recording.find('startTime').text)/1000
+
 
         publish_recordings(request,firstcourse)
         checkMeetingStatus = isMeetingRunning(request,firstcourse)
@@ -1150,13 +1153,9 @@ def dashboard(request):
         'course_bbb':course_bbb,
         'updates_to_show':updates_to_show,
         'dashboard_element_availability':dashboard_element_availablity,
-<<<<<<< HEAD
-        'org_recordings':org_recordings
-=======
         'org_recordings':org_recordings,
         'calendar_link':calendar_link,
         'total_list':tot,
->>>>>>> indus.dashboard
         }
 
     ecommerce_service = EcommerceService()
@@ -1242,15 +1241,9 @@ def publish_recordings(request, course_id):
         return assign2Dict(xml)
 
 def get_recordings(request):
-<<<<<<< HEAD
     url_join = settings.BIGBLUEBUTTON_SERVER + "api/getRecordings?"
     final_url = url_join + 'checksum=' + hashlib.sha1("getRecordings" + settings.BIGBLUEBUTTON_SALT).hexdigest()
 
-=======
-    url_join = settings.BIGBLUEBUTTON_SERVER + "api/getRecordings?"
-    final_url = url_join + 'checksum=' + hashlib.sha1("getRecordings" + settings.BIGBLUEBUTTON_SALT).hexdigest()
-
->>>>>>> indus.dashboard
     xml = bbb_wrap_load_file(final_url)
     #xml = parseString('<response><returncode>SUCCESS</returncode><recordings><recording><recordID>183f0bf3a0982a127bdb8161-1308597520</recordID><meetingID>EdX Demonstration Course</meetingID><name><![CDATA[On-line session for CS 101]]></name><published>false</published><state>unpublished</state><startTime>34545465656</startTime><endTime>34575565465</endTime><participants>3</participants><playback><format><type>presentation</type><url>http://server.com/presentation/playback?recordID=183f0bf3a0982a127bdb8161-1</url><length>62</length><preview><images><image width="176" height="136" alt="Welcome to">http://server.com/presentation/183f0bf3a0982a127bdb8161-1.../presentation/d2d9a672040fbde2a47a10bf6c37b6a4b5ae187f-1472495280413/thumbnails/thumb-1.png</image></images></preview></format></playback></recording><recording><recordID>183f0bf3a0982a127bdb8161-13085974450</recordID><meetingID>CS102</meetingID></recording></recordings><messageKey/><message/></response>')
     #root = ET.fromstring('<response><returncode>SUCCESS</returncode><recordings><recording><recordID>183f0bf3a0982a127bdb8161-1308597520</recordID><meetingID>EdX Demonstration Course</meetingID><name><![CDATA[On-line session for CS 101]]></name><published>false</published><state>unpublished</state><startTime>34545465656</startTime><endTime>34575565465</endTime><participants>3</participants><playback><format><type>presentation</type><url>http://server.com/presentation/playback?recordID=183f0bf3a0982a127bdb8161-1</url><length>62</length><preview><images><image width="176" height="136" alt="Welcome to">http://server.com/presentation/183f0bf3a0982a127bdb8161-1.../presentation/d2d9a672040fbde2a47a10bf6c37b6a4b5ae187f-1472495280413/thumbnails/thumb-1.png</image></images></preview></format></playback></recording><recording><recordID>183f0bf3a0982a127bdb8161-13085974450</recordID><meetingID>CS102</meetingID></recording></recordings><messageKey/><message/></response>')
@@ -1301,11 +1294,7 @@ def joinBBB(request, course_id):
                       'moderatorPW' : 'mp',
                       'logoutURL': 'http://indus.edvay.com',
                       'record': 'true',
-<<<<<<< HEAD
                       }
-=======
-                      }
->>>>>>> indus.dashboard
         parameters = urllib.urlencode(parameters)
         final_url = url_join + parameters + '&checksum=' + hashlib.sha1("create" + parameters + settings.BIGBLUEBUTTON_SALT).hexdigest()
         bbb_wrap_load_file(final_url)

@@ -744,6 +744,23 @@ def get_last_accessed_courseware(course, request, user):
             return url
     return None
 
+def get_student_progress(user,course_id,courseContent):
+    ##indus dashboard changes end
+
+    course_grade = CourseGradeFactory().create(user,course_key=course_id)
+    courseware_summary = course_grade.chapter_grades.values()
+    total_earned=0
+    total_possible=0
+    for chapter in courseware_summary:
+        for section in chapter['sections']:
+            earned = section.all_total.earned
+            total_earned=earned+total_earned
+            total = section.all_total.possible
+            total_possible = total+total_possible
+    return (total_earned,total_possible)
+
+
+
 @login_required
 @ensure_csrf_cookie
 def dashboard(request):
@@ -891,6 +908,7 @@ def dashboard(request):
     dashboard_element_availablity['recordings'] = False
     allrecordings = get_recordings(request)
     org_recordings = []
+    tot={}
     for firstcourse in show_courseware_links_for:
         firstcourseContent = modulestore().get_course(firstcourse)
         course_updates_module = get_course_info_section_module(request,request.user,firstcourseContent, 'updates')
@@ -899,6 +917,17 @@ def dashboard(request):
         for temp in tempUpdates:
             temp['coursename'] =  firstcourseContent.display_name
         update_items.extend(tempUpdates)
+
+        total_earned, total_possible = get_student_progress(request.user,firstcourse,firstcourseContent)
+        if total_earned == 0 and total_possible == 0:
+            total_possible = 0
+            tot[firstcourseContent.display_name]=total_earned = 0
+        else:
+            m=float(total_earned)/total_possible
+            k = m*100
+            tot[firstcourseContent.display_name]=int(k)
+
+
 
         temptext = {}
         temptext['coursename'] = firstcourseContent.display_name
@@ -984,32 +1013,8 @@ def dashboard(request):
     cert_statuses = {
         enrollment.course_id: cert_info(request.user, enrollment.course_overview, enrollment.mode)
         for enrollment in course_enrollments
-}
-   ##indus dashboard changes end
-    total_list=[]
-    tot={}
-    course_key = enrolled_course_ids
-    for courses in course_key:
-        course_grade = CourseGradeFactory().create(user,course_key=courses)
-        courseContent = modulestore().get_course(courses)
-        courseware_summary = course_grade.chapter_grades.values()
-        total_earned=0
-        total_possible=0
-        for chapter in courseware_summary:
-            for section in chapter['sections']:
-                earned = section.all_total.earned
-                total_earned=earned+total_earned
-                total = section.all_total.possible
-                total_possible = total+total_possible
+                    }
 
-        courseContent = modulestore().get_course(courses)
-        if total_earned == 0 and total_possible == 0:
-            total_possible = 0
-            tot[courseContent.display_name]=total_earned = 0
-        else:
-            m=float(total_earned)/total_possible
-            k = m*100
-            tot[courseContent.display_name]=int(k)
 
 
     # Determine the per-course verification status

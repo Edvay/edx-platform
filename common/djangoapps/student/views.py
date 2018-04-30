@@ -918,17 +918,15 @@ def dashboard(request):
             temp['coursename'] =  firstcourseContent.display_name
         update_items.extend(tempUpdates)
 
-        # total_earned, total_possible = get_student_progress(request.user,firstcourse,firstcourseContent)
-        # if total_earned == 0 and total_possible == 0:
-        #     total_possible = 0
-        #     tot[firstcourseContent.display_name]=total_earned = 0
-        # else:
-        #     m=float(total_earned)/total_possible
-        #     k = m*100
-        #     tot[firstcourseContent.display_name]=int(k)
-
-
-
+        total_earned, total_possible = get_student_progress(request.user,firstcourse,firstcourseContent)
+        if total_earned == 0 and total_possible == 0:
+            total_possible = 0
+            tot[firstcourseContent.number]=total_earned = 0
+        else:
+            m=float(total_earned)/total_possible
+            k = m*100
+            tot[firstcourseContent.number]=int(k)
+     
         temptext = {}
         temptext['coursename'] = firstcourseContent.display_name
         temptext['id'] = firstcourseContent.id

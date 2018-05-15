@@ -8,6 +8,7 @@ import logging
 import os
 import re
 import shutil
+import requests
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
@@ -35,10 +36,18 @@ from util.json_request import JsonResponse
 from util.views import ensure_valid_course_key
 from xmodule.exceptions import SerializationError
 from xmodule.modulestore.django import modulestore
+from util.organizations_helpers import get_organization_by_short_name, organizations_enabled
+
+from contentstore.views.course import create_new_course_in_store
+from xmodule.course_module import DEFAULT_START_DATE
+from django.views.decorators.csrf import csrf_exempt
+
+from django.contrib.auth.models import User
+from xmodule.modulestore.exceptions import DuplicateCourseError
 
 __all__ = [
     'import_handler', 'import_status_handler',
-    'export_handler', 'export_output_handler', 'export_status_handler',
+    'export_handler', 'export_output_handler', 'export_status_handler', 'import_course_from_ganges'
 ]
 
 
@@ -445,3 +454,36 @@ def _latest_task_status(request, course_key_string, view_func=None):
     for status_filter in STATUS_FILTERS:
         task_status = status_filter().filter_queryset(request, task_status, view_func)
     return task_status.order_by(u'-created').first()
+
+@csrf_exempt
+def import_course_from_ganges(request):
+    org = request.POST.get('org', '')
+    number = request.POST.get('coursename', '')
+    run = request.POST.get('run', '')
+    fields = {'display_name': number}
+    user = User.objects.get(email="staff@example.com")
+    org_data = get_organization_by_short_name(org)
+    if not org_data and organizations_enabled():
+        return JsonResponse(
+            {'error': _('You must link this course to an organization in order to continue. '
+                        'Organization you selected does not exist in the system, '
+                        'you will need to add it to the system')},
+            status=400
+        )
+    store_for_new_course = modulestore().default_modulestore.get_modulestore_type()
+    course_id = None
+    destination_course_key = None
+    with modulestore().default_store('split'):
+        destination_course_key = modulestore().make_course_key(org, number, run)
+
+    # verify org course and run don't already exist
+    if not modulestore().has_course(destination_course_key, ignore_case=True):
+        try:
+            new_course = create_new_course_in_store(store_for_new_course, user, org, number, run, fields)
+            course_id = new_course.id
+        except DuplicateCourseError as exception:
+            pass
+    else:
+        course_id = destination_course_key
+    request.user = user
+    return _write_chunk(request,course_id)

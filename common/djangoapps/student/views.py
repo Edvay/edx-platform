@@ -921,6 +921,7 @@ def dashboard(request):
         total_earned, total_possible = get_student_progress(request.user,firstcourse,firstcourseContent)
         if total_earned == 0 and total_possible == 0:
             total_possible = 0
+<<<<<<< HEAD
             tot[firstcourseContent.display_name]=total_earned = 0
         else:
             m=float(total_earned)/total_possible
@@ -929,6 +930,14 @@ def dashboard(request):
 
 
 
+=======
+            tot[firstcourseContent.number]=total_earned = 0
+        else:
+            m=float(total_earned)/total_possible
+            k = m*100
+            tot[firstcourseContent.number]=int(k)
+     
+>>>>>>> 2922454b5d0145303d6d1f7e791c2461ab51d5fe
         temptext = {}
         temptext['coursename'] = firstcourseContent.display_name
         temptext['id'] = firstcourseContent.id

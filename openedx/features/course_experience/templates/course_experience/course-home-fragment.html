@@ -20,7 +20,7 @@ from openedx.features.course_experience.course_tools import CourseToolsPluginMan
 
 <%block name="content">
 <div class="course-view container" id="course-container">
-    <header class="page-header has-secondary">
+    <!-- <header class="page-header has-secondary">
         <div class="page-header-main">
             <nav aria-label="${_('Course Outline')}" class="sr-is-focusable" tabindex="-1">
                 <h2 class="hd hd-3 page-title">${course.display_name_with_default}</h2>
@@ -54,7 +54,7 @@ from openedx.features.course_experience.course_tools import CourseToolsPluginMan
                 % endif
             </div>
         </div>
-    </header>
+    </header> -->
     <div class="page-content">
         <div class="layout layout-1t2t">
             <main class="layout-col layout-col-b">
@@ -66,12 +66,12 @@ from openedx.features.course_experience.course_tools import CourseToolsPluginMan
 
                 ${HTML(outline_fragment.body_html())}
             </main>
-            <aside class="course-sidebar layout-col layout-col-a">
+            <aside class="course-sidebar layout-col layout-col-a panel panel-default curriculum paper-shadow">
                 <%
                 course_tools = CourseToolsPluginManager.get_course_tools()
                 %>
                 % if course_tools:
-                    <div class="section section-tools">
+                    <!-- <div class="section section-tools">
                         <h3 class="hd-6">${_("Course Tools")}</h3>
                         <ul class="list-unstyled">
                             % for course_tool in course_tools:
@@ -85,7 +85,7 @@ from openedx.features.course_experience.course_tools import CourseToolsPluginMan
                                 % endif
                             % endfor
                         </ul>
-                    </div>
+                    </div> -->
                 % endif
                 <div class="section section-dates">
                     ${HTML(dates_fragment.body_html())}

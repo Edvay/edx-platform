@@ -11,10 +11,20 @@ from django.utils.translation import ugettext as _
 
 from openedx.core.djangolib.markup import HTML, Text
 %>
+<script>
+function setURL(url){
+    document.getElementById('main').style.display = 'none';
+    document.getElementById('course-iframe').src = url;
+     return false;
+}
+function resizeIframe(obj) {
+    obj.style.height = obj.contentWindow.document.body.scrollHeight + 'px';
+  }
+</script>
 
-<main role="main" class="course-outline" id="main" tabindex="-1">
+<main role="main" class="course-outline panel panel-default curriculum paper-shadow" id="main" tabindex="-1">
     % if blocks.get('children'):
-        <ol class="block-tree" role="tree">
+        <ol class="block-tree" role="tree" style="list-style-type: none;">
             % for section in blocks.get('children'):
                 <li
                     aria-expanded="true"
@@ -23,11 +33,31 @@ from openedx.core.djangolib.markup import HTML, Text
                     role="treeitem"
                     tabindex="0"
                 >
-                    <div class="section-name">
-                        <h3>${ section['display_name'] }</h3>
+                    <div class="panel-heading panel-heading-gray" data-toggle="collapse" data-target="#curriculum-2">
+                        <div class="media">
+                          <div class="media-left">
+                            <span class="icon-block half img-circle bg-orange-300 text-white"><i class="fa fa-graduation-cap"></i></span>
+                          </div>
+                          <div class="media-body">
+                            <h4 class="text-headline">${ section['display_name'] }</h4>
+                          </div>
+                        </div>
+
                     </div>
-                    <ol class="outline-item focusable" role="group" tabindex="0">
+
+                    <ol class="outline-item focusable" role="group" tabindex="0" style="list-style-type: none;">
                         % for subsection in section.get('children', []):
+                            <!-- <div class="list-group-item media" data-target="website-take-course.html">
+                                 <div class="media-left">
+                                   <div class="text-crt">1.</div>
+                                 </div>
+                                 <div class="media-body">
+                                   <i class="fa fa-fw fa-circle text-grey-200"></i> Installation
+                                 </div>
+                                 <div class="media-right">
+                                   <div class="width-100 text-right text-caption">2:03 min</div>
+                                 </div>
+                            </div> -->
                             <li
                                 class="subsection ${ 'current' if subsection['last_accessed'] else '' }"
                                 role="treeitem"
@@ -35,12 +65,14 @@ from openedx.core.djangolib.markup import HTML, Text
                                 aria-expanded="true"
                             >
                                 <a
-                                    class="outline-item focusable"
+                                    class="outline-item focusable list-group-item media"
                                     href="${ subsection['lms_web_url'] }"
+                                    onclick="return setURL('${ subsection['lms_web_url'] }')"
                                     id="${ subsection['id'] }"
                                 >
-                                    <div class="subsection-text">
+                                    <div class="subsection-text media-body">
                                         ## Subsection title
+                                         <i class="fa fa-fw fa-circle text-grey-200"></i>
                                         <span class="subsection-title">${ subsection['display_name'] }</span>
 
                                         <div class="details">
@@ -155,6 +187,8 @@ from openedx.core.djangolib.markup import HTML, Text
         </div>
     % endif
 </main>
+<iframe id="course-iframe"  style="width:100%;" src="" frameborder="0" onload="resizeIframe(this)" />
+
 
 <%static:require_module_async module_name="js/dateutil_factory" class_name="DateUtilFactory">
     DateUtilFactory.transform('.localized-datetime');

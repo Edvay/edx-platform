@@ -911,7 +911,11 @@ def dashboard(request):
     tot={}
     for firstcourse in show_courseware_links_for:
         firstcourseContent = modulestore().get_course(firstcourse)
-        course_updates_module = get_course_info_section_module(request,request.user,firstcourseContent, 'updates')
+        try:
+            course_updates_module = get_course_info_section_module(request,request.user,firstcourseContent, 'updates') 
+        except AttributeError:
+            break
+        # course_updates_module = get_course_info_section_module(request,request.user,firstcourseContent, 'updates')
         tempUpdates = get_course_update_items(course_updates_module)
 
         for temp in tempUpdates:

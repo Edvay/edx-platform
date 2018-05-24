@@ -90,6 +90,11 @@ urlpatterns += patterns(
         'course_search_index_handler',
         name='course_search_index_handler'
     ),
+
+    # delete course url
+    url(r'^indus_course_delete_edx/$', 'indus_course_delete_edx', name='indus_course_delete_edx'),
+    # delete course url
+
     url(r'^course/{}?$'.format(settings.COURSE_KEY_PATTERN), 'course_handler', name='course_handler'),
     url(r'^course_notifications/{}/(?P<action_state_id>\d+)?$'.format(settings.COURSE_KEY_PATTERN),
         'course_notifications_handler'),

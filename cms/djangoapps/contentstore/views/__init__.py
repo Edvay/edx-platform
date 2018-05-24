@@ -20,6 +20,7 @@ from .user import *
 from .tabs import *
 from .videos import *
 from .transcripts_ajax import *
+from .indus_course_delete_edx import *
 try:
     from .dev import *
 except ImportError:

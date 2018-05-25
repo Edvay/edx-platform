@@ -1002,7 +1002,9 @@ def dashboard(request):
     meta = profile.get_meta()
 
     last_accessed_name = None
-    last_accessed_url = "/courses/" + str(course_bbb[0]['id']) +"/course"
+    last_accessed_url = None
+    if len(course_bbb) > 0:
+        last_accessed_url = "/courses/" + str(course_bbb[0]['id']) +"/course"
     if 'last_accessed_course' in meta:
         course_id = meta['last_accessed_course']
         last_accessed_url = "/courses/" + course_id +"/course"

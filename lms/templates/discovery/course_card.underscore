@@ -1,4 +1,4 @@
-<div class="item col-xs-12 col-sm-6 col-lg-4">
+<div class="item col-xs-12 col-sm-4 col-lg-3">
               <div class="panel panel-default paper-shadow" data-z="0.5">
 
                 <div class="cover overlay cover-image-full hover">
@@ -18,7 +18,7 @@
                 </div>
 
                 <div class="panel-body">
-                  <h4 class="text-headline margin-v-0-10"><a href="/courses/<%- course %>/about"><%- content.display_name %></a></h4>
+                  <h4 class="margin-v-0-10"><a href="/courses/<%- course %>/about"><%- content.display_name %></a></h4>
 
 
 

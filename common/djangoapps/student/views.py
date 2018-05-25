@@ -912,7 +912,7 @@ def dashboard(request):
     for firstcourse in show_courseware_links_for:
         firstcourseContent = modulestore().get_course(firstcourse)
         try:
-            course_updates_module = get_course_info_section_module(request,request.user,firstcourseContent, 'updates') 
+            course_updates_module = get_course_info_section_module(request,request.user,firstcourseContent, 'updates')
         except AttributeError:
             break
         # course_updates_module = get_course_info_section_module(request,request.user,firstcourseContent, 'updates')
@@ -1002,12 +1002,10 @@ def dashboard(request):
     meta = profile.get_meta()
 
     last_accessed_name = None
-    last_accessed_url = None
+    last_accessed_url = "/courses/" + str(course_bbb[0]['id']) +"/course"
     if 'last_accessed_course' in meta:
         course_id = meta['last_accessed_course']
-        course_key = CourseKey.from_string(unicode(course_id))
-        last_accessed_url = get_last_accessed_courseware(modulestore().get_course(course_key),request, request.user)
-        last_accessed_name = 'Demo'
+        last_accessed_url = "/courses/" + course_id +"/course"
     if not last_accessed_url:
         last_accessed_url = '' #reverse('info', args=[unicode(course_enrollments[0].course_overview.id)])
 

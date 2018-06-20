@@ -366,8 +366,9 @@ from openedx.core.djangolib.markup import HTML, Text
     
       <script> 
       function dosomething(courseid){
-
-  alert(courseid)
+  var x = confirm("Are you sure you want to delete?");
+  if (x)
+  {
   $.ajax({
             url: '/indus_course_delete_edx/',
             method:'POST',
@@ -380,6 +381,11 @@ from openedx.core.djangolib.markup import HTML, Text
             
           });
   return false;
+}
+else
+{
+  return false
+}
 }  
       
       //   $(document).ready(function() {

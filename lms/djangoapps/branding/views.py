@@ -21,8 +21,24 @@ from openedx.core.djangoapps.lang_pref.api import released_languages
 from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
 from util.cache import cache_if_anonymous
 from util.json_request import JsonResponse
+from student_account.views import login_and_registration_form
+from create_site.views import indus_main_login_edx, indus_index_edx
 
 log = logging.getLogger(__name__)
+
+
+def login_router(request):
+    if str(request.site_theme) == 'indus6':
+        return indus_main_login_edx(request)
+    else:
+        return login_and_registration_form(request,initial_mode="login")
+
+def register_router(request):
+    if str(request.site_theme) == 'indus6':
+        return indus_index_edx(request)
+    else:
+        return login_and_registration_form(request,initial_mode="register")
+
 
 
 @ensure_csrf_cookie

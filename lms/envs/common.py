@@ -53,6 +53,8 @@ PLATFORM_TWITTER_ACCOUNT = "@YourPlatformTwitterAccount"
 
 ENABLE_JASMINE = False
 
+ECOMMERCE_COURSE_PRICING_URI = "http://indus.edvay.com:18130/courses"
+
 DISCUSSION_SETTINGS = {
     'MAX_COMMENT_DEPTH': 2,
 }
@@ -2239,7 +2241,7 @@ INSTALLED_APPS = (
 
     'experiments',
 
-    #indus launcher 
+    #indus launcher
     'create_site'
 )
 

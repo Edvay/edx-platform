@@ -487,3 +487,11 @@ def import_course_from_ganges(request):
         course_id = destination_course_key
     request.user = user
     return _write_chunk(request,course_id)
+
+@csrf_exempt
+def import_course_from_indus(request):
+    received_json_data=json.loads(request.body)
+    import_olx.delay(
+        received_json_data['user_id'], received_json_data['course_key_string'], path(received_json_data['archive_path']), received_json_data['archive_name'],received_json_data['language'])
+
+    return JsonResponse({'ImportStatus': 1})

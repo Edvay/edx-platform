@@ -42,6 +42,7 @@ from xmodule.modulestore.modulestore_settings import update_module_store_setting
 from xmodule.modulestore.edit_info import EditInfoMixin
 from openedx.core.lib.license import LicenseMixin
 from lms.djangoapps.lms_xblock.mixin import LmsBlockMixin
+from path import Path as path
 
 ################################### FEATURES ###################################
 # The display name of the platform to be used in templates/emails/etc.
@@ -53,11 +54,17 @@ PLATFORM_TWITTER_ACCOUNT = "@YourPlatformTwitterAccount"
 
 ENABLE_JASMINE = False
 
+COURSE_IMPORT_EXPORT_STORAGE = 'django.core.files.storage.FileSystemStorage'
+
 DISCUSSION_SETTINGS = {
     'MAX_COMMENT_DEPTH': 2,
 }
 
 LMS_ROOT_URL = "http://localhost:8000"
+INDUS_COURSE_PATH=path("/edx/var/edxapp/media/indus/")
+INDUS_COURSE_TEPM_PATH="/edx/var/edxapp/media/indus_temp/"
+INDUS_COURSE_NAME = "course.DlF1Yv.tar.gz"
+INDUS_COURSE_ARCHIVE_PATH=path("/edx/var/edxapp/media/indus_temp/course.DlF1Yv.tar.gz")
 
 # Features
 FEATURES = {

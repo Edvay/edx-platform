@@ -2,7 +2,8 @@ from django.conf import settings
 from django.conf.urls import include, patterns, url
 # There is a course creators admin table.
 from ratelimitbackend import admin
-
+from contentstore.views.import_export import import_course_from_indus
+# from . import views
 from cms.djangoapps.contentstore.views.organization import OrganizationListView, AllowedOrganization
 
 admin.autodiscover()
@@ -68,6 +69,10 @@ urlpatterns = patterns(
     url(r'^help_token/', include('help_tokens.urls')),
 )
 
+urlpatterns += [ 
+ url(r'indus/$', import_course_from_indus , name='import_course_from_indus'),
+    ]
+
 # restful api
 urlpatterns += patterns(
     'contentstore.views',
@@ -104,6 +109,7 @@ urlpatterns += patterns(
     url(r'^assets/{}/{}?$'.format(settings.COURSE_KEY_PATTERN, settings.ASSET_KEY_PATTERN), 'assets_handler'),
     url(r'^import/{}$'.format(COURSELIKE_KEY_PATTERN), 'import_handler'),
     url(r'^import/ganges$', 'import_course_from_ganges'),
+    # url(r'^import/indus$', 'import_course_from_indus'),
     url(r'^import_status/{}/(?P<filename>.+)$'.format(COURSELIKE_KEY_PATTERN), 'import_status_handler'),
     # rest api for course import/export
     url(

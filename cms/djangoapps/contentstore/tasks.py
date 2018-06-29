@@ -389,18 +389,20 @@ def import_olx(self, user_id, course_key_string, archive_path, archive_name, lan
 
     # Locate the uploaded OLX archive (and download it from S3 if necessary)
     # Do everything in a try-except block to make sure everything is properly cleaned up.
+    
     data_root = path(settings.GITHUB_REPO_ROOT)
     subdir = base64.urlsafe_b64encode(repr(courselike_key))
     course_dir = data_root / subdir
-    try:
+    
+    try:        
         self.status.set_state(u'Unpacking')
-
         if not archive_name.endswith(u'.tar.gz'):
             with respect_language(language):
                 self.status.fail(_(u'We only support uploading a .tar.gz file.'))
                 return
 
         temp_filepath = course_dir / get_valid_filename(archive_name)
+        
         if not course_dir.isdir():  # pylint: disable=no-value-for-parameter
             os.mkdir(course_dir)
 

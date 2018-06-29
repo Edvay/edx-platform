@@ -530,7 +530,9 @@ def course_listing(request):
         }
 
     courses_iter = _remove_in_process_courses(courses_iter, in_process_course_actions)
+    print'+++++++++++++++++++++++',courses_iter
     in_process_course_actions = [format_in_process_course_view(uca) for uca in in_process_course_actions]
+    
 
     return render_to_response(u'index.html', {
         u'courses': list(courses_iter),

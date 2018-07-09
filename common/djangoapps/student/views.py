@@ -1056,12 +1056,7 @@ def dashboard(request):
     reverifications = reverification_info(statuses)
 
     user_already_has_certs_for = GeneratedCertificate.course_ids_with_certs_for_user(request.user)
-    show_refund_option_for = frozenset(
-        enrollment.course_id for enrollment in course_enrollments
-        if enrollment.refundable(
-            user_already_has_certs_for=user_already_has_certs_for
-        )
-    )
+    show_refund_option_for = frozenset()
 
     block_courses = frozenset(
         enrollment.course_id for enrollment in course_enrollments

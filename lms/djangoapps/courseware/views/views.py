@@ -597,17 +597,15 @@ def get_course_prices(course, verified_only=False):
     """
     # Find the
     if verified_only:
-        registration_price = CourseMode.min_course_price_for_verified_for_currency(
-            course.id,
-            settings.PAID_COURSE_REGISTRATION_CURRENCY[0]
+        registration_price,currency = CourseMode.indus_min_course_price(
+            course.id
         )
     else:
-        registration_price = CourseMode.min_course_price_for_currency(
-            course.id,
-            settings.PAID_COURSE_REGISTRATION_CURRENCY[0]
+        registration_price,currency = CourseMode.indus_min_course_price(
+            course.id
         )
 
-    currency_symbol = settings.PAID_COURSE_REGISTRATION_CURRENCY[1]
+    currency_symbol = currency
 
     if registration_price > 0:
         price = registration_price

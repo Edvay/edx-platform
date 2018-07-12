@@ -649,6 +649,18 @@ class CourseMode(models.Model):
         return min(mode.min_price for mode in modes if mode.currency.lower() == currency.lower())
 
     @classmethod
+    def indus_min_course_price(cls, course_id):
+        """
+        Returns the minimum price of the course in the appropriate currency over all the course's
+        non-expired modes.
+        If there is no mode found, will return the price of DEFAULT_MODE, which is 0
+        """
+        modes = cls.modes_for_course(course_id)
+        course_pricing ={}
+        print(modes)
+        return (modes[0].min_price,modes[0].currency)
+
+    @classmethod
     def is_eligible_for_certificate(cls, mode_slug):
         """
         Returns whether or not the given mode_slug is eligible for a

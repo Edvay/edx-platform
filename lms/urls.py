@@ -218,6 +218,45 @@ urlpatterns += (
         name='jump_to_id',
     ),
 
+    ###ready to handle junk calls from iframe
+
+    # xblock Handler APIs
+    url(
+        r'^courses/(.*)/(.*)/(.*)/(.*)/(.*)/courses/{course_key}/xblock/{usage_key}/handler/(?P<handler>[^/]*)(?:/(?P<suffix>.*))?$'.format(
+            course_key=settings.COURSE_ID_PATTERN,
+            usage_key=settings.USAGE_ID_PATTERN,
+        ),
+        'courseware.module_render.handle_xblock_callback',
+        name='xblock_handler',
+    ),
+    url(
+        r'^courses/(.*)/(.*)/(.*)/(.*)/(.*)/courses/{course_key}/xblock/{usage_key}/handler_noauth/(?P<handler>[^/]*)(?:/(?P<suffix>.*))?$'.format(
+            course_key=settings.COURSE_ID_PATTERN,
+            usage_key=settings.USAGE_ID_PATTERN,
+        ),
+        'courseware.module_render.handle_xblock_callback_noauth',
+        name='xblock_handler_noauth',
+    ),
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    #############****************
+
+
+
+
     # xblock Handler APIs
     url(
         r'^courses/{course_key}/xblock/{usage_key}/handler/(?P<handler>[^/]*)(?:/(?P<suffix>.*))?$'.format(

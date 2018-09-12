@@ -807,7 +807,7 @@ def dashboard(request):
     # longer exist (because the course IDs have changed). Still, we don't delete those
     # enrollments, because it could have been a data push snafu.
     course_enrollments = list(get_course_enrollments(user, course_org_filter, org_filter_out_set))
-    
+
     # Record how many courses there are so that we can get a better
     # understanding of usage patterns on prod.
     monitoring_utils.accumulate('num_courses', len(course_enrollments))
@@ -878,7 +878,7 @@ def dashboard(request):
         if has_access(request.user, 'load', enrollment.course_overview)
         and has_access(request.user, 'view_courseware_with_prerequisites', enrollment.course_overview)
     )
-   
+
     # Find programs associated with course runs being displayed. This information
     # is passed in the template context to allow rendering of program-related
     # information on the dashboard.
@@ -910,12 +910,12 @@ def dashboard(request):
     allrecordings = get_recordings(request)
     org_recordings = []
     h=[]
-    
+
     tot={}
     for firstcourse in show_courseware_links_for:
-        m = EdvayInstance.objects.filter(org_name=firstcourse.org)
-        for j in m:
-            feature_list = j.plan_pricing.Plan_feature.feature_name.all()
+        # m = EdvayInstance.objects.filter(org_name=firstcourse.org)
+        # for j in m:
+        #     feature_list = j.plan_pricing.Plan_feature.feature_name.all()
 
 
 
@@ -1168,7 +1168,6 @@ def dashboard(request):
         'org_recordings':org_recordings,
         'calendar_link':calendar_link,
         'total_list':tot,
-        'feature_list':feature_list,
         }
 
     ecommerce_service = EcommerceService()

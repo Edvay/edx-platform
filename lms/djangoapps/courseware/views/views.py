@@ -761,7 +761,7 @@ def course_about(request, course_id):
 
         # Determine which checkout workflow to use -- LMS shoppingcart or Otto basket
         can_add_course_to_cart = _is_shopping_cart_enabled and registration_price and not ecommerce_checkout_link
-
+        
         # Used to provide context to message to student if enrollment not allowed
         can_enroll = bool(has_access(request.user, 'enroll', course))
         invitation_only = course.invitation_only
@@ -855,7 +855,6 @@ def program_marketing(request, program_uuid):
 def progress(request, course_id, student_id=None):
     """ Display the progress page. """
     course_key = CourseKey.from_string(course_id)
-    print'cccccccccccccccccccccccyyyyyyyyyyyyy',course_key
     with modulestore().bulk_operations(course_key):
         return _progress(request, course_key, student_id)
 

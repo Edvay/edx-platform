@@ -164,6 +164,7 @@ import django_comment_client.utils as utils
 from xml.dom.minidom import parse, parseString
 from create_site.models import EdvayInstance
 import xml.etree.ElementTree as ET
+import operator
 
 log = logging.getLogger("edx.student")
 AUDIT_LOG = logging.getLogger("audit")
@@ -878,7 +879,6 @@ def dashboard(request):
         if has_access(request.user, 'load', enrollment.course_overview)
         and has_access(request.user, 'view_courseware_with_prerequisites', enrollment.course_overview)
     )
-
     # Find programs associated with course runs being displayed. This information
     # is passed in the template context to allow rendering of program-related
     # information on the dashboard.
@@ -909,16 +909,16 @@ def dashboard(request):
     dashboard_element_availablity['recordings'] = False
     allrecordings = get_recordings(request)
     org_recordings = []
-    h=[]
+    feature_list=[]
 
     tot={}
+
     for firstcourse in show_courseware_links_for:
-        # m = EdvayInstance.objects.filter(org_name=firstcourse.org)
-        # for j in m:
-        #     feature_list = j.plan_pricing.Plan_feature.feature_name.all()
-
-
-
+        org_list = EdvayInstance.objects.filter(org_name=firstcourse.org)
+        for j in org_list:
+            features = j.plan_pricing.Plan_feature.feature_name.all()
+            feature_list = [s.feature_name for s in features]
+            
 
         firstcourseContent = modulestore().get_course(firstcourse)
         try:
@@ -1005,6 +1005,7 @@ def dashboard(request):
         update for update in update_items
         if update.get("status") != "deleted"
      ]
+    sorted_anouncement=sorted( updates_to_show, key = operator.itemgetter('date'),reverse=True)
 
     profile = UserProfile.objects.get(user=user)
     last_accessed_name = None
@@ -1163,11 +1164,12 @@ def dashboard(request):
         'handout_items':handout_items,
         'discussion_threads':discussion_threads,
         'course_bbb':course_bbb,
-        'updates_to_show':updates_to_show,
+        'updates_to_show':sorted_anouncement,
         'dashboard_element_availability':dashboard_element_availablity,
         'org_recordings':org_recordings,
         'calendar_link':calendar_link,
         'total_list':tot,
+        'feature_list':feature_list,
         }
 
     ecommerce_service = EcommerceService()

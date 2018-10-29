@@ -20,8 +20,8 @@ class GoogleOauth2IntegrationTest(base.Oauth2IntegrationTest):
         self.provider = self.configure_google_provider(
             enabled=True,
             visible=True,
-            key='google_oauth2_key',
-            secret='google_oauth2_secret',
+            key='825617301895-mtnnsks23nj905libgitjmc6v1bgd4q0.apps.googleusercontent.com',
+            secret='TIdZoVrNgzRnBKo0bjLfDgmk',
         )
 
     TOKEN_RESPONSE_DATA = {
